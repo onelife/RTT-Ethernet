@@ -5,7 +5,12 @@
 #include "IPAddress.h"
 #include "EthernetClient.h"
 #include "EthernetServer.h"
-#include "Dhcp.h"
+
+#define DHCP_CHECK_NONE         (0)
+#define DHCP_CHECK_RENEW_FAIL   (1)
+#define DHCP_CHECK_RENEW_OK     (2)
+#define DHCP_CHECK_REBIND_FAIL  (3)
+#define DHCP_CHECK_REBIND_OK    (4)
 
 enum EthernetLinkStatus {
   Unknown,
@@ -16,9 +21,12 @@ enum EthernetLinkStatus {
 class EthernetClass {
   private:
     IPAddress _dnsServerAddress;
-    DhcpClass *_dhcp;
+    uint8_t _dhcp_lease_state;
     uint8_t mac_address[6];
     uint8_t   *MACAddressDefault(void);
+    IPAddress getDnsServerIp();
+    int beginWithDHCP(unsigned long timeout = 10000);
+    uint8_t checkLease();
 
   public:
     // Initialise the Ethernet with the internal provided MAC address and gain the rest of the
@@ -48,6 +56,7 @@ class EthernetClass {
     IPAddress localIP();
     IPAddress subnetMask();
     IPAddress gatewayIP();
+    IPAddress getDhcpServerIp();
     IPAddress dnsServerIP();
     int getHostByName(const char *aHostname, IPAddress &aResult);
 

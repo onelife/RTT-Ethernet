@@ -1,5 +1,4 @@
 #include "STM32Ethernet.h"
-#include "Dhcp.h"
 
 // Possible return codes from ProcessResponse
 #define SUCCESS          1
@@ -10,14 +9,12 @@
 
 int EthernetClass::begin(unsigned long timeout, unsigned long responseTimeout)
 {
-  static DhcpClass s_dhcp;
-  _dhcp = &s_dhcp;
   stm32_eth_init(MACAddressDefault(), NULL, NULL, NULL);
 
   // Now try to get our config info from a DHCP server
-  int ret = _dhcp->beginWithDHCP(mac_address, timeout, responseTimeout);
+  int ret = beginWithDHCP(timeout);
   if (ret == 1) {
-    _dnsServerAddress = _dhcp->getDnsServerIp();
+    _dnsServerAddress = getDnsServerIp();
   }
 
   return ret;
@@ -58,15 +55,12 @@ void EthernetClass::begin(IPAddress local_ip, IPAddress subnet, IPAddress gatewa
 
 int EthernetClass::begin(uint8_t *mac_address, unsigned long timeout, unsigned long responseTimeout)
 {
-  static DhcpClass s_dhcp;
-  _dhcp = &s_dhcp;
-
   stm32_eth_init(mac_address, NULL, NULL, NULL);
 
   // Now try to get our config info from a DHCP server
-  int ret = _dhcp->beginWithDHCP(mac_address, timeout, responseTimeout);
+  int ret = beginWithDHCP(timeout);
   if (ret == 1) {
-    _dnsServerAddress = _dhcp->getDnsServerIp();
+    _dnsServerAddress = getDnsServerIp();
   }
   MACAddress(mac_address);
   return ret;
@@ -113,25 +107,12 @@ EthernetLinkStatus EthernetClass::linkStatus()
 
 int EthernetClass::maintain()
 {
-  int rc = DHCP_CHECK_NONE;
+  uint8_t rc = checkLease();
 
-  if (_dhcp != NULL) {
-    //we have a pointer to dhcp, use it
-    rc = _dhcp->checkLease();
-    switch (rc) {
-      case DHCP_CHECK_NONE:
-        //nothing done
-        break;
-      case DHCP_CHECK_RENEW_OK:
-      case DHCP_CHECK_REBIND_OK:
-        _dnsServerAddress = _dhcp->getDnsServerIp();
-        break;
-      default:
-        //this is actually a error, it will retry though
-        break;
-    }
-  }
-  return rc;
+  if ((DHCP_CHECK_RENEW_OK == rc) || (DHCP_CHECK_REBIND_OK == rc))
+    _dnsServerAddress = getDnsServerIp();
+
+  return (int)rc;
 }
 
 /*
@@ -185,6 +166,76 @@ IPAddress EthernetClass::subnetMask()
 IPAddress EthernetClass::gatewayIP()
 {
   return IPAddress(stm32_eth_get_gwaddr());
+}
+
+IPAddress EthernetClass::getDhcpServerIp()
+{
+  return IPAddress(stm32_eth_get_dhcpaddr());
+}
+
+IPAddress EthernetClass::getDnsServerIp()
+{
+  return IPAddress(stm32_eth_get_dnsaddr());
+}
+
+int EthernetClass::beginWithDHCP(unsigned long timeout)
+{
+  _dhcp_lease_state = DHCP_CHECK_NONE;
+  uint8_t is_timeout = 0;
+  unsigned long startTime = millis();
+
+  stm32_set_DHCP_state(DHCP_START);
+
+  while (stm32_get_DHCP_state() != DHCP_ADDRESS_ASSIGNED) {
+    if ((millis() - startTime) > timeout) {
+      is_timeout = 1;
+      stm32_set_DHCP_state(DHCP_ASK_RELEASE);
+      break;
+    }
+  }
+
+  if (is_timeout) {
+    return 0;
+  }
+  return 1;
+}
+
+/*
+    returns:
+    0/DHCP_CHECK_NONE: nothing happened
+    1/DHCP_CHECK_RENEW_FAIL: renew failed
+    2/DHCP_CHECK_RENEW_OK: renew success
+    3/DHCP_CHECK_REBIND_FAIL: rebind fail
+    4/DHCP_CHECK_REBIND_OK: rebind success
+*/
+uint8_t EthernetClass::checkLease()
+{
+  uint8_t last = _dhcp_lease_state;
+  uint8_t current = stm32_get_DHCP_lease_state();
+
+  do {
+    if (current == last)
+      break;
+    _dhcp_lease_state = current;
+
+    if (DHCP_CHECK_NONE == last) {
+      current = DHCP_CHECK_NONE;
+    } else if (DHCP_CHECK_RENEW_OK == last) {
+      if (DHCP_CHECK_NONE == current)
+        current = DHCP_CHECK_RENEW_OK;
+      else
+        current = DHCP_CHECK_RENEW_FAIL;
+    } else if (DHCP_CHECK_REBIND_OK == last) {
+      if (DHCP_CHECK_NONE == current)
+        current = DHCP_CHECK_REBIND_OK;
+      else
+        current = DHCP_CHECK_REBIND_FAIL;
+    } else {
+      _dhcp_lease_state = DHCP_CHECK_NONE;
+    }
+  } while (0);
+
+  return current;
 }
 
 IPAddress EthernetClass::dnsServerIP()

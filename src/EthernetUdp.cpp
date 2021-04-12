@@ -26,6 +26,7 @@
  * bjoern@cs.stanford.edu 12/30/2008
  */
 #include "STM32Ethernet.h"
+#include "EthernetUdp.h"
 #include "Udp.h"
 
 #include "lwip/igmp.h"
