@@ -49,6 +49,7 @@ class EthernetClass {
     IPAddress subnetMask();
     IPAddress gatewayIP();
     IPAddress dnsServerIP();
+    int getHostByName(const char *aHostname, IPAddress &aResult);
 
     friend class EthernetClient;
     friend class EthernetServer;

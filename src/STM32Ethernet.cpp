@@ -1,6 +1,13 @@
 #include "STM32Ethernet.h"
 #include "Dhcp.h"
 
+// Possible return codes from ProcessResponse
+#define SUCCESS          1
+#define TIMED_OUT        -1
+#define INVALID_SERVER   -2
+#define TRUNCATED        -3
+#define INVALID_RESPONSE -4
+
 int EthernetClass::begin(unsigned long timeout, unsigned long responseTimeout)
 {
   static DhcpClass s_dhcp;
@@ -183,6 +190,22 @@ IPAddress EthernetClass::gatewayIP()
 IPAddress EthernetClass::dnsServerIP()
 {
   return _dnsServerAddress;
+}
+
+int EthernetClass::getHostByName(const char *aHostname, IPAddress &aResult)
+{
+  int ret = 0;
+  uint32_t ipResult = 0;
+
+  // Check we've got a valid DNS server to use
+  if ((uint32_t)_dnsServerAddress == 0) {
+    return INVALID_SERVER;
+  }
+
+  ret = stm32_dns_gethostbyname(aHostname, &ipResult);
+  aResult = IPAddress(ipResult);
+
+  return ret;
 }
 
 EthernetClass Ethernet;

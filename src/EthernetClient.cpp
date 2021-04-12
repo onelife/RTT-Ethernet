@@ -7,7 +7,6 @@ extern "C" {
 #include "STM32Ethernet.h"
 #include "EthernetClient.h"
 #include "EthernetServer.h"
-#include "Dns.h"
 
 EthernetClient::EthernetClient()
   : _tcp_client(NULL)
@@ -31,11 +30,9 @@ int EthernetClient::connect(const char *host, uint16_t port)
 {
   // Look up the host first
   int ret = 0;
-  DNSClient dns;
   IPAddress remote_addr;
 
-  dns.begin(Ethernet.dnsServerIP());
-  ret = dns.getHostByName(host, remote_addr);
+  ret = Ethernet.getHostByName(host, remote_addr);
   if (ret == 1) {
     return connect(remote_addr, port);
   } else {
