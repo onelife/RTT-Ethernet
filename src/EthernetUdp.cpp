@@ -79,8 +79,6 @@ uint8_t EthernetUDP::begin(IPAddress ip, uint16_t port, bool multicast)
   _port = port;
   _remaining = 0;
 
-  stm32_eth_scheduler();
-
   return 1;
 }
 
@@ -99,8 +97,6 @@ void EthernetUDP::stop()
     udp_remove(_udp.pcb);
     _udp.pcb = NULL;
   }
-
-  stm32_eth_scheduler();
 }
 
 int EthernetUDP::beginPacket(const char *host, uint16_t port)
@@ -127,7 +123,6 @@ int EthernetUDP::beginPacket(IPAddress ip, uint16_t port)
   _sendtoPort = port;
 
   udp_recv(_udp.pcb, &udp_receive_callback, &_udp);
-  stm32_eth_scheduler();
 
   return 1;
 }
@@ -140,12 +135,11 @@ int EthernetUDP::endPacket()
 
   ip_addr_t ipaddr;
   if (ERR_OK != udp_sendto(_udp.pcb, _data, u8_to_ip_addr(rawIPAddress(_sendtoIP), &ipaddr), _sendtoPort)) {
-    _data = stm32_free_data(_data);
+    _data = stm32_free_pbuf(_data);
     return 0;
   }
 
-  _data = stm32_free_data(_data);
-  stm32_eth_scheduler();
+  _data = stm32_free_pbuf(_data);
 
   return 1;
 }
@@ -174,8 +168,6 @@ int EthernetUDP::parsePacket()
   //   // hope the w5100 always behaves :)
   //   read();
   // }
-
-  stm32_eth_scheduler();
 
   if (_udp.data.available > 0) {
     _remoteIP = IPAddress(ip_addr_to_u32(&(_udp.ip)));

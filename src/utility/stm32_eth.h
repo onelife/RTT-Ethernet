@@ -40,6 +40,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32_def.h"
+#include "queue.h"
 #include "lwip/ip_addr.h"
 #include "lwip/dhcp.h"
 #include "lwip/udp.h"
@@ -62,6 +63,9 @@ typedef enum {
 struct pbuf_data {
   struct pbuf *p;     // the packet buffer that was received
   uint16_t available; // number of data
+  uint16_t offset;
+  void *_pbuf_queue[ETH_RXBUFNB];
+  queue_t pbuf_queue;
 };
 
 /* UDP structure */
@@ -120,7 +124,6 @@ struct tcp_struct {
 void stm32_eth_init(const uint8_t *mac, const uint8_t *ip, const uint8_t *gw, const uint8_t *netmask);
 uint8_t stm32_eth_is_init(void);
 uint8_t stm32_eth_link_up(void);
-void stm32_eth_scheduler(void);
 
 void User_notification(struct netif *netif);
 
@@ -157,7 +160,8 @@ uint32_t stm32_eth_get_dnsaddr(void);
 uint32_t stm32_eth_get_dhcpaddr(void);
 
 struct pbuf *stm32_new_data(struct pbuf *p, const uint8_t *buffer, size_t size);
-struct pbuf *stm32_free_data(struct pbuf *p);
+void stm32_free_data(struct pbuf_data *data);
+struct pbuf *stm32_free_pbuf(struct pbuf *p);
 uint16_t stm32_get_data(struct pbuf_data *data, uint8_t *buffer, size_t size);
 
 ip_addr_t *u8_to_ip_addr(uint8_t *ipu8, ip_addr_t *ipaddr);

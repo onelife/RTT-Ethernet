@@ -60,6 +60,8 @@ int EthernetClient::connect(IPAddress ip, uint16_t port)
 
   _tcp_client->data.p = NULL;
   _tcp_client->data.available = 0;
+  _tcp_client->data.offset = 0;
+  queue_init(_tcp_client->data.pbuf_queue, _tcp_client->data._pbuf_queue);
   _tcp_client->state = TCP_NONE;
 
   ip_addr_t ipaddr;
@@ -71,11 +73,11 @@ int EthernetClient::connect(IPAddress ip, uint16_t port)
 
   uint32_t startTime = millis();
   while (_tcp_client->state == TCP_NONE) {
-    stm32_eth_scheduler();
     if ((_tcp_client->state == TCP_CLOSING) || ((millis() - startTime) >= 10000)) {
       stop();
       return 0;
     }
+    rt_thread_sleep(CONFIG_TICK_PER_SECOND / 100);
   }
 
   return 1;
@@ -125,7 +127,6 @@ size_t EthernetClient::write(const uint8_t *buf, size_t size)
     if (ERR_OK != tcp_output(_tcp_client->pcb)) {
       return 0;
     }
-    stm32_eth_scheduler();
 
   } while (bytes_sent != size);
 
@@ -134,7 +135,6 @@ size_t EthernetClient::write(const uint8_t *buf, size_t size)
 
 int EthernetClient::available()
 {
-  stm32_eth_scheduler();
   if (_tcp_client != NULL) {
     return _tcp_client->data.available;
   }
@@ -177,7 +177,6 @@ void EthernetClient::flush()
     return;
   }
   tcp_output(_tcp_client->pcb);
-  stm32_eth_scheduler();
 }
 
 void EthernetClient::stop()
@@ -188,8 +187,14 @@ void EthernetClient::stop()
 
   // close tcp connection if not closed yet
   if (status() != TCP_CLOSING) {
-    tcp_connection_close(_tcp_client->pcb, _tcp_client);
+    if (_tcp_client->pcb == NULL) {
+      _tcp_client->state = TCP_CLOSING;
+    } else {
+      tcp_connection_close(_tcp_client->pcb, _tcp_client);
+    }
   }
+
+  stm32_free_data(&(_tcp_client->data));
 }
 
 uint8_t EthernetClient::connected()

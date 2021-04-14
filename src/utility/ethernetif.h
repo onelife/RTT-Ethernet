@@ -59,6 +59,7 @@ void ethernetif_input(struct netif *netif);
 void ethernetif_set_link(struct netif *netif);
 void ethernetif_update_config(struct netif *netif);
 void ethernetif_notify_conn_changed(struct netif *netif);
+void ethernetif_status_changed(struct netif *netif);
 
 void ethernetif_set_mac_addr(const uint8_t *mac);
 

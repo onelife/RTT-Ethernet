@@ -3,6 +3,7 @@
 
 #include <inttypes.h>
 #include "IPAddress.h"
+#include "rtt.h"
 #include "EthernetClient.h"
 #include "EthernetServer.h"
 
@@ -21,8 +22,9 @@ enum EthernetLinkStatus {
 class EthernetClass {
   private:
     IPAddress _dnsServerAddress;
-    uint8_t _dhcp_lease_state;
     uint8_t mac_address[6];
+    uint8_t _dhcp_lease_state;
+
     uint8_t   *MACAddressDefault(void);
     IPAddress getDnsServerIp();
     int beginWithDHCP(unsigned long timeout = 10000);
@@ -32,7 +34,7 @@ class EthernetClass {
     // Initialise the Ethernet with the internal provided MAC address and gain the rest of the
     // configuration through DHCP.
     // Returns 0 if the DHCP configuration failed, and 1 if it succeeded
-    int begin(unsigned long timeout = 60000, unsigned long responseTimeout = 4000);
+    int begin(unsigned long timeout = 10000);
     EthernetLinkStatus linkStatus();
     void begin(IPAddress local_ip);
     void begin(IPAddress local_ip, IPAddress subnet);
@@ -41,7 +43,7 @@ class EthernetClass {
     // Initialise the Ethernet shield to use the provided MAC address and gain the rest of the
     // configuration through DHCP.
     // Returns 0 if the DHCP configuration failed, and 1 if it succeeded
-    int begin(uint8_t *mac_address, unsigned long timeout = 60000, unsigned long responseTimeout = 4000);
+    int begin(uint8_t *mac_address, unsigned long timeout = 10000);
     void begin(uint8_t *mac_address, IPAddress local_ip);
     void begin(uint8_t *mac_address, IPAddress local_ip, IPAddress dns_server);
     void begin(uint8_t *mac_address, IPAddress local_ip, IPAddress dns_server, IPAddress gateway);
@@ -49,7 +51,6 @@ class EthernetClass {
 
 
     int maintain();
-    void schedule(void);
 
     void MACAddress(uint8_t *mac);
     uint8_t *MACAddress(void);

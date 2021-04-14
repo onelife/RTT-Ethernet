@@ -1,16 +1,35 @@
 {
-  "name": "STM32Ethernet",
-  "keywords": "Ethernet",
+  "name": "RTT-Ethernet",
+  "version": "2.0.0",
   "description": "Arduino library to support Ethernet for STM32 based board.",
-  "repository":
-  {
+  "keywords": ["Ethernet", "RTOS", "RT-Thread", "rtt"],
+  "repository": {
     "type": "git",
-    "url": "https://github.com/stm32duino/STM32Ethernet"
+    "url": "https://github.com/onelife/RTT-Ethernet"
   },
-  "version": "1.2.0",
+  "license": "LGPL-2.1-or-later",
   "frameworks": "arduino",
   "platforms": "ststm32",
+  "dependencies": [
+    {
+        "owner": "onelife",
+        "name": "RT-Thread",
+        "version": ">=0.9.0"
+    },
+    {
+        "owner": "onelife",
+        "name": "RTT-CMSIS-OS",
+        "version": ">=0.9.0",
+    },
+    {
+        "owner": "stm32duino",
+        "name": "STM32duino LwIP",
+        "version": ">=2.1.2",
+    }
+  ],
   "build": {
     "libArchive": false
   }
+
+  
 }

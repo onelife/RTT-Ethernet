@@ -7,7 +7,8 @@
 #define TRUNCATED        -3
 #define INVALID_RESPONSE -4
 
-int EthernetClass::begin(unsigned long timeout, unsigned long responseTimeout)
+
+int EthernetClass::begin(unsigned long timeout)
 {
   stm32_eth_init(MACAddressDefault(), NULL, NULL, NULL);
 
@@ -53,7 +54,7 @@ void EthernetClass::begin(IPAddress local_ip, IPAddress subnet, IPAddress gatewa
   _dnsServerAddress = dns_server;
 }
 
-int EthernetClass::begin(uint8_t *mac_address, unsigned long timeout, unsigned long responseTimeout)
+int EthernetClass::begin(uint8_t *mac_address, unsigned long timeout)
 {
   stm32_eth_init(mac_address, NULL, NULL, NULL);
 
@@ -113,15 +114,6 @@ int EthernetClass::maintain()
     _dnsServerAddress = getDnsServerIp();
 
   return (int)rc;
-}
-
-/*
- * This function updates the LwIP stack and can be called to be sure to update
- * the stack (e.g. in case of a long loop).
- */
-void EthernetClass::schedule(void)
-{
-  stm32_eth_scheduler();
 }
 
 uint8_t *EthernetClass::MACAddressDefault(void)
@@ -192,6 +184,7 @@ int EthernetClass::beginWithDHCP(unsigned long timeout)
       stm32_set_DHCP_state(DHCP_ASK_RELEASE);
       break;
     }
+    rt_thread_sleep(CONFIG_TICK_PER_SECOND / 10);
   }
 
   if (is_timeout) {

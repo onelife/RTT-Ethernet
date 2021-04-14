@@ -37,8 +37,10 @@
   */
 
 #include "Arduino.h"
+#include "rtt.h"
 #include "stm32_eth.h"
-#include "lwip/init.h"
+#include "lwip/sys.h"
+#include "lwip/tcpip.h"
 #include "lwip/netif.h"
 #include "lwip/timeouts.h"
 #include "netif/ethernet.h"
@@ -55,17 +57,6 @@
 
 /* Maximum number of retries for DHCP request */
 #define MAX_DHCP_TRIES  4
-
-/*
- * Defined a default timer used to call ethernet scheduler at regular interval
- * Could be redefined in the variant
- * Note: This is planned to extend Timer API's of the Arduino STM32 core
- *       They could be used for this library when available
- */
-#ifndef DEFAULT_ETHERNET_TIMER
-  #define DEFAULT_ETHERNET_TIMER  TIM14
-  #warning "Default timer used to call ethernet scheduler at regular interval: TIM14"
-#endif
 
 /* Ethernet configuration: user parameters */
 struct stm32_eth_config {
@@ -92,27 +83,23 @@ static uint8_t DHCP_Started_by_user = 0;
 /* Ethernet link status periodic timer */
 static uint32_t gEhtLinkTickStart = 0;
 
-#if !defined(STM32_CORE_VERSION) || (STM32_CORE_VERSION  <= 0x01060100)
-  /* Handler for stimer */
-  static stimer_t TimHandle;
-#endif
-
 /*************************** Function prototype *******************************/
-static void Netif_Config(void);
+static void tcpip_init_done(void *arg);
 static err_t tcp_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err);
 static err_t tcp_sent_callback(void *arg, struct tcp_pcb *tpcb, u16_t len);
 static void tcp_err_callback(void *arg, err_t err);
-static void TIM_scheduler_Config(void);
 
 /**
 * @brief  Configurates the network interface
 * @param  None
 * @retval None
 */
-static void Netif_Config(void)
+static void tcpip_init_done(void *arg)
 {
+  (void)arg;
+
   /* Add the network interface */
-  netif_add(&gnetif, &(gconfig.ipaddr), &(gconfig.netmask), &(gconfig.gw), NULL, &ethernetif_init, &ethernet_input);
+  netif_add(&gnetif, &(gconfig.ipaddr), &(gconfig.netmask), &(gconfig.gw), NULL, &ethernetif_init, &tcpip_input);
 
   /* Registers the default network interface */
   netif_set_default(&gnetif);
@@ -129,69 +116,45 @@ static void Netif_Config(void)
   /* Set the link callback function, this function is called on change of link status */
   netif_set_link_callback(&gnetif, ethernetif_update_config);
 #endif /* LWIP_NETIF_LINK_CALLBACK */
+
+#if LWIP_NETIF_STATUS_CALLBACK
+  netif_set_status_callback(&gnetif, ethernetif_status_changed);
+#endif /* LWIP_NETIF_STATUS_CALLBACK */
 }
 
-/**
-* @brief  Scheduler callback. Call by a timer interrupt.
-* @param  htim: pointer to stimer_t or Hardware Timer
-* @retval None
-*/
-#if !defined(STM32_CORE_VERSION) || (STM32_CORE_VERSION  <= 0x01060100)
-  static void scheduler_callback(stimer_t *htim)
-#elif (STM32_CORE_VERSION  <= 0x01080000)
-  static void scheduler_callback(HardwareTimer *htim)
-#else
-  static void scheduler_callback(void)
-#endif
-{
-#if (STM32_CORE_VERSION  <= 0x01080000)
-  UNUSED(htim);
-#endif
-  stm32_eth_scheduler();
+void ethernet_thread(void *arg) {
+  extern ETH_HandleTypeDef EthHandle;
+  (void)arg;
+
+  LWIP_DEBUGF(NETIF_DEBUG, ("Start ethernet_thread\n"));
+  while (1) {
+    /* Check RX status */
+    if ((EthHandle.Instance->DMASR & ETH_DMASR_RBUS) != (uint32_t)RESET) {
+      LWIP_DEBUGF(NETIF_DEBUG, ("Re-enable RX\n"));
+      ethernetif_input(&gnetif);
+    }
+
+    /* Check ethernet link status */
+    if ((HAL_GetTick() - gEhtLinkTickStart) >= TIME_CHECK_ETH_LINK_STATE) {
+      ethernetif_set_link(&gnetif);
+      gEhtLinkTickStart = HAL_GetTick();
+    }
+
+    /* Handle LwIP timeouts */
+    // sys_check_timeouts();
+
+#if LWIP_DHCP
+    stm32_DHCP_Periodic_Handle(&gnetif);
+#endif /* LWIP_DHCP */
+
+    rt_thread_sleep(CONFIG_TICK_PER_SECOND / 100);
+  }
 }
 
-#if !defined(STM32_CORE_VERSION) || (STM32_CORE_VERSION  <= 0x01060100)
-/**
-* @brief  Enable the timer used to call ethernet scheduler function at regular
-*         interval.
-* @param  None
-* @retval None
-*/
-static void TIM_scheduler_Config(void)
-{
-  /* Set TIMx instance. */
-  TimHandle.timer = DEFAULT_ETHERNET_TIMER;
-  /* Timer set to 1ms */
-  TimerHandleInit(&TimHandle, (uint16_t)(1000 - 1), ((uint32_t)(getTimerClkFreq(DEFAULT_ETHERNET_TIMER) / (1000000)) - 1));
-  attachIntHandle(&TimHandle, scheduler_callback);
-}
-#else
-/**
-* @brief  Enable the timer used to call ethernet scheduler function at regular
-*         interval.
-* @param  None
-* @retval None
-*/
-static void TIM_scheduler_Config(void)
-{
-  /* Configure HardwareTimer */
-  HardwareTimer *EthTim = new HardwareTimer(DEFAULT_ETHERNET_TIMER);
-
-  /* Timer set to 1ms */
-  EthTim->setOverflow(1000, MICROSEC_FORMAT);
-  EthTim->attachInterrupt(scheduler_callback);
-  EthTim->resume();
-}
-#endif
-
-void stm32_eth_init(const uint8_t *mac, const uint8_t *ip, const uint8_t *gw, const uint8_t *netmask)
-{
+void stm32_eth_init(const uint8_t *mac, const uint8_t *ip, const uint8_t *gw, const uint8_t *netmask) {
   static uint8_t initDone = 0;
 
   if (!initDone) {
-    /* Initialize the LwIP stack */
-    lwip_init();
-
     if (mac != NULL) {
       ethernetif_set_mac_addr(mac);
     } // else default value is used: MAC_ADDR0 ... MAC_ADDR5
@@ -226,11 +189,8 @@ void stm32_eth_init(const uint8_t *mac, const uint8_t *ip, const uint8_t *gw, co
 #endif /* LWIP_DHCP */
     }
 
-    /* Configure the Network interface */
-    Netif_Config();
-
-    // stm32_eth_scheduler() will be called every 1ms.
-    TIM_scheduler_Config();
+    /* Initialize the LwIP stack */
+    tcpip_init(&tcpip_init_done, NULL);
 
     initDone = 1;
   }
@@ -238,8 +198,8 @@ void stm32_eth_init(const uint8_t *mac, const uint8_t *ip, const uint8_t *gw, co
   /* Reset DHCP if used */
   User_notification(&gnetif);
 
-  /* Update LwIP stack */
-  stm32_eth_scheduler();
+  /* Start Ethernet thread */
+  (void)sys_thread_new("ethernet", ethernet_thread, NULL, ETHERNET_THREAD_STACKSIZE, ETHERNET_THREAD_PRIO);
 }
 
 /**
@@ -260,33 +220,6 @@ uint8_t stm32_eth_is_init(void)
 uint8_t stm32_eth_link_up(void)
 {
   return netif_is_link_up(&gnetif);
-}
-
-/**
-  * @brief  This function must be called in main loop in standalone mode.
-  * @param  None
-  * @retval None
-  */
-void stm32_eth_scheduler(void)
-{
-  /* Read a received packet from the Ethernet buffers and send it
-  to the lwIP for handling */
-#ifndef ETH_INPUT_USE_IT
-  ethernetif_input(&gnetif);
-#endif /* ETH_INPUT_USE_IT */
-
-  /* Check ethernet link status */
-  if ((HAL_GetTick() - gEhtLinkTickStart) >= TIME_CHECK_ETH_LINK_STATE) {
-    ethernetif_set_link(&gnetif);
-    gEhtLinkTickStart = HAL_GetTick();
-  }
-
-  /* Handle LwIP timeouts */
-  sys_check_timeouts();
-
-#if LWIP_DHCP
-  stm32_DHCP_Periodic_Handle(&gnetif);
-#endif /* LWIP_DHCP */
 }
 
 #if LWIP_DHCP
@@ -310,7 +243,7 @@ void stm32_DHCP_process(struct netif *netif)
 {
   struct dhcp *dhcp;
 
-  if (netif_is_link_up(netif)) {
+  if (netif_is_up(netif) && netif_is_link_up(netif)) {
     switch (DHCP_state) {
       case DHCP_START: {
           ip_addr_set_zero_ip4(&netif->ip_addr);
@@ -318,7 +251,6 @@ void stm32_DHCP_process(struct netif *netif)
           ip_addr_set_zero_ip4(&netif->gw);
           DHCP_state = DHCP_WAIT_ADDRESS;
           dhcp_start(netif);
-          DHCP_Started_by_user = 1;
         }
         break;
 
@@ -410,9 +342,11 @@ uint8_t stm32_get_DHCP_lease_state(void)
   * @param  state: DHCP_START, DHCP_ASK_RELEASE or DHCP_STOP. Others should not be used.
   * @retval None
   */
-void stm32_set_DHCP_state(uint8_t state)
-{
+void stm32_set_DHCP_state(uint8_t state) {
   DHCP_state = state;
+  if (DHCP_START == state) {
+    DHCP_Started_by_user = 1;
+  }
 }
 
 /**
@@ -503,6 +437,7 @@ void ethernetif_notify_conn_changed(struct netif *netif)
 
     /* When the netif is fully configured this function must be called.*/
     netif_set_up(netif);
+    LWIP_DEBUGF(NETIF_DEBUG, ("Link UP\n"));
   } else {
     /* Update DHCP state machine if DHCP used */
     if (DHCP_Started_by_user == 1) {
@@ -511,6 +446,7 @@ void ethernetif_notify_conn_changed(struct netif *netif)
 
     /*  When the netif link is down this function must be called.*/
     netif_set_down(netif);
+    LWIP_DEBUGF(NETIF_DEBUG, ("Link DOWN\n"));
   }
 }
 
@@ -596,11 +532,11 @@ int8_t stm32_dns_gethostbyname(const char *hostname, uint32_t *ipaddr)
     case ERR_INPROGRESS:
       tickstart = HAL_GetTick();
       while (*ipaddr == 0) {
-        stm32_eth_scheduler();
         if ((HAL_GetTick() - tickstart) >= TIMEOUT_DNS_REQUEST) {
           ret = -1;
           break;
         }
+        rt_thread_sleep(RT_TICK_PER_SECOND / 10);
       }
 
       if (ret == 0) {
@@ -691,12 +627,24 @@ struct pbuf *stm32_new_data(struct pbuf *p, const uint8_t *buffer, size_t size)
   return 0;
 }
 
+void stm32_free_data(struct pbuf_data *data) {
+  if (data->p == NULL) {
+    return;
+  }
+  while (!is_empty(&data->pbuf_queue)) {
+    stm32_free_pbuf((struct pbuf *)queue_get(&data->pbuf_queue));
+  }
+  stm32_free_pbuf(data->p);
+  data->available = 0;
+  data->offset = 0;
+}
+
 /**
   * @brief  Free pbuf
   * @param  p: pointer to pbuf
   * @retval return always NULL
   */
-struct pbuf *stm32_free_data(struct pbuf *p)
+struct pbuf *stm32_free_pbuf(struct pbuf *p)
 {
   uint16_t n;
 
@@ -719,45 +667,47 @@ struct pbuf *stm32_free_data(struct pbuf *p)
   */
 uint16_t stm32_get_data(struct pbuf_data *data, uint8_t *buffer, size_t size)
 {
-  uint16_t i;
-  uint16_t offset;
   uint16_t nb;
-  struct pbuf *ptr;
+  uint16_t to_copy;
+  uint16_t copied;
 
-  if ((data->p == NULL) || (buffer == NULL) || (size == 0) ||
-      (data->available == 0) || (data->available > data->p->tot_len)) {
+  if ((data->p == NULL) || (buffer == NULL) || (size == 0) || (data->available == 0)) {
     return 0;
   }
 
-  nb = 0;
+  if (size == 1) {
+    buffer[0] = pbuf_get_at(data->p, data->offset);
+    data->available--;
 
-  while ((nb < size) && (data->p != NULL) && (data->available > 0)) {
-    ptr = data->p;
-    offset = ptr->tot_len - data->available;
-
-    /* Get data from p */
-    for (i = 0; (nb < size) && ((offset + i) < ptr->len) && (data->available > 0); i++) {
-      buffer[nb] = pbuf_get_at(ptr, offset + i);
-      nb++;
-      data->available--;
+    if ((data->offset + 1) == data->p->tot_len) {
+      /* Current "pbuf" done */
+      stm32_free_pbuf(data->p);
+      data->offset = 0;
+      data->p = (struct pbuf *)queue_get(&data->pbuf_queue);
+    } else {
+      data->offset++;
     }
 
-    if (nb < size) {
-      /* continue with next pbuf in chain (if any) */
-      data->p = ptr->next;
-
-      if (data->p != NULL) {
-        /* increment reference count for p */
-        pbuf_ref(data->p);
-      }
-
-      /* chop first pbuf from chain */
-      ptr = stm32_free_data(ptr);
-    }
+    return 1;
   }
 
-  if (data->available == 0) {
-    data->p = stm32_free_data(data->p);
+  nb = 0;
+  to_copy = size;
+  while (nb < size) {
+    copied = pbuf_copy_partial(data->p, &buffer[nb], to_copy, data->offset);
+    data->available -= copied;
+    nb += copied;
+
+    if ((copied < to_copy) || ((data->offset + copied) == data->p->tot_len)) {
+      /* Current "pbuf" done */
+      stm32_free_pbuf(data->p);
+      data->offset = 0;
+      data->p = (struct pbuf *)queue_get(&data->pbuf_queue);
+      if (data->p == NULL)
+        break;
+    }
+    data->offset += copied;
+    to_copy -= copied;
   }
 
   return nb;
@@ -867,12 +817,15 @@ err_t tcp_accept_callback(void *arg, struct tcp_pcb *newpcb, err_t err)
       client->pcb = newpcb;
       client->data.p = NULL;
       client->data.available = 0;
+      client->data.offset = 0;
+      queue_init(client->data.pbuf_queue, client->data._pbuf_queue);
 
       /* Looking for an empty socket */
       for (uint16_t i = 0; i < MAX_CLIENT; i++) {
         if (tcpClient[i] == NULL) {
           tcpClient[i] = client;
           accepted = 1;
+          LWIP_DEBUGF(NETIF_DEBUG, ("ACCEPT %d\n", i));
           break;
         }
       }
@@ -936,24 +889,33 @@ static err_t tcp_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, 
   else if (err != ERR_OK) {
     /* free received pbuf*/
     if (p != NULL) {
+      LWIP_DEBUGF(NETIF_DEBUG, ("RECV err %d\n", err));
       pbuf_free(p);
     }
     ret_err = err;
   } else if ((tcp_arg->state == TCP_CONNECTED) || (tcp_arg->state == TCP_ACCEPTED)) {
     /* Acknowledge data reception */
     tcp_recved(tpcb, p->tot_len);
+    LWIP_DEBUGF(NETIF_DEBUG, ("RECV %d\n", p->tot_len));
 
     if (tcp_arg->data.p == NULL) {
       tcp_arg->data.p = p;
+      tcp_arg->data.available += p->tot_len;
+      tcp_arg->data.offset = 0;
     } else {
-      pbuf_chain(tcp_arg->data.p, p);
+      if (!queue_put(&tcp_arg->data.pbuf_queue, (void *)p)) {
+        LWIP_DEBUGF(NETIF_DEBUG, ("Client pbuf queue full\n"));
+        pbuf_free(p);
+      } else {
+        tcp_arg->data.available += p->tot_len;
+      }
     }
 
-    tcp_arg->data.available += p->len;
     ret_err = ERR_OK;
   }
   /* data received when connection already closed */
   else {
+    LWIP_DEBUGF(NETIF_DEBUG, ("CLOSE\n"));
     /* Acknowledge data reception */
     tcp_recved(tpcb, p->tot_len);
 
@@ -976,6 +938,7 @@ static err_t tcp_sent_callback(void *arg, struct tcp_pcb *tpcb, u16_t len)
 {
   struct tcp_struct *tcp_arg = (struct tcp_struct *)arg;
 
+  LWIP_DEBUGF(NETIF_DEBUG, ("SENT %d\n", len));
   LWIP_UNUSED_ARG(len);
 
   if ((tcp_arg != NULL) && (tcp_arg->pcb == tpcb)) {
@@ -999,6 +962,7 @@ static void tcp_err_callback(void *arg, err_t err)
 {
   struct tcp_struct *tcp_arg = (struct tcp_struct *)arg;
 
+  LWIP_DEBUGF(NETIF_DEBUG, ("TCP ERR %d\n", err));
   if (tcp_arg != NULL) {
     if (ERR_OK != err) {
       tcp_arg->pcb = NULL;
@@ -1015,6 +979,7 @@ static void tcp_err_callback(void *arg, err_t err)
   */
 void tcp_connection_close(struct tcp_pcb *tpcb, struct tcp_struct *tcp)
 {
+  LWIP_DEBUGF(NETIF_DEBUG, ("CLOSE %p %p\n", tpcb, tcp));
   /* remove callbacks */
   tcp_recv(tpcb, NULL);
   tcp_sent(tpcb, NULL);

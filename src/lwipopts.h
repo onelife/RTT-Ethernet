@@ -1,21 +1,20 @@
-/*
+/***************************************************************************//**
  * @file    lwipopts.h
- * @author  Frederic Pillon <frederic.pillon@st.com> for STMicroelectronics.
- * @brief   Include header file to match Arduino library format
- */
+ * @brief   Arduino RTT-Ethernet library LwIP options header
+ * @author  onelife <onelife.real[at]gmail.com>
+ ******************************************************************************/
+#ifndef __LWIPOPTS_H__
+#define __LWIPOPTS_H__
 
-#ifndef _ARDUINO_LWIPOPTS_H
-#define _ARDUINO_LWIPOPTS_H
+#if __has_include("lwipopts_rtt.h")
+# include "lwipopts_rtt.h"
 
-/* LwIP specific configuration options. */
-#if __has_include("STM32lwipopts.h")
-  #include "STM32lwipopts.h"
 #else
-  #if __has_include("lwipopts_extra.h")
-    #include "lwipopts_extra.h"
-  #endif
-  #include "lwipopts_default.h"
+# include "lwipopts_default.h"
+# if __has_include("lwipopts_extra.h")
+#  include "lwipopts_extra.h"
+# endif
+
 #endif
 
-#endif /* _ARDUINO_LWIPOPTS_H */
-
+#endif /* __LWIPOPTS_H__ */
