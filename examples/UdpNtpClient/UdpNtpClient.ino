@@ -13,43 +13,60 @@
  by Tom Igoe
  modified 02 Sept 2015
  by Arturo Guadalupi
- modified 23 Jun 2017
- by Wi6Labs
- modified 1 Jun 2018
- by sstaub
+
  This code is in the public domain.
 
  */
 
-#include <LwIP.h>
-#include <STM32Ethernet.h>
+#include <SPI.h>
+#include <Ethernet.h>
 #include <EthernetUdp.h>
+
+// Enter a MAC address for your controller below.
+// Newer Ethernet shields have a MAC address printed on a sticker on the shield
+byte mac[] = {
+  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED
+};
 
 unsigned int localPort = 8888;       // local port to listen for UDP packets
 
-char timeServer[] = "time.nist.gov"; // time.nist.gov NTP server
+const char timeServer[] = "time.nist.gov"; // time.nist.gov NTP server
 
 const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of the message
 
-byte packetBuffer[ NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
+byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
 
 // A UDP instance to let us send and receive packets over UDP
 EthernetUDP Udp;
 
 void setup() {
+  // You can use Ethernet.init(pin) to configure the CS pin
+  //Ethernet.init(10);  // Most Arduino shields
+  //Ethernet.init(5);   // MKR ETH shield
+  //Ethernet.init(0);   // Teensy 2.0
+  //Ethernet.init(20);  // Teensy++ 2.0
+  //Ethernet.init(15);  // ESP8266 with Adafruit Featherwing Ethernet
+  //Ethernet.init(33);  // ESP32 with Adafruit Featherwing Ethernet
+
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
   }
 
-
   // start Ethernet and UDP
-  if (Ethernet.begin() == 0) {
+  if (Ethernet.begin(mac) == 0) {
     Serial.println("Failed to configure Ethernet using DHCP");
+    // Check for Ethernet hardware present
+    if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+      Serial.println("Ethernet shield was not found.  Sorry, can't run without hardware. :(");
+    } else if (Ethernet.linkStatus() == LinkOFF) {
+      Serial.println("Ethernet cable is not connected.");
+    }
     // no point in carrying on, so do nothing forevermore:
-    for (;;)
-      ;
+    while (true) {
+      delay(1);
+    }
   }
   Udp.begin(localPort);
 }
@@ -106,7 +123,7 @@ void loop() {
 }
 
 // send an NTP request to the time server at the given address
-void sendNTPpacket(char* address) {
+void sendNTPpacket(const char * address) {
   // set all bytes in the buffer to 0
   memset(packetBuffer, 0, NTP_PACKET_SIZE);
   // Initialize values needed to form NTP request
@@ -123,7 +140,17 @@ void sendNTPpacket(char* address) {
 
   // all NTP fields have been given values, now
   // you can send a packet requesting a timestamp:
-  Udp.beginPacket(address, 123); //NTP requests are to port 123
+  Udp.beginPacket(address, 123); // NTP requests are to port 123
   Udp.write(packetBuffer, NTP_PACKET_SIZE);
   Udp.endPacket();
 }
+
+
+
+
+
+
+
+
+
+

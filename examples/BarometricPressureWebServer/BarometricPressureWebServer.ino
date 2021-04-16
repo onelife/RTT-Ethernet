@@ -8,6 +8,9 @@
  This sketch adapted from Nathan Seidle's SCP1000 example for PIC:
  http://www.sparkfun.com/datasheets/Sensors/SCP1000-Testing.zip
 
+ TODO: this hardware is long obsolete.  This example program should
+ be rewritten to use https://www.sparkfun.com/products/9721
+
  Circuit:
  SCP1000 sensor attached to pins 6,7, and 11 - 13:
  DRDY: pin 6
@@ -18,18 +21,18 @@
 
  created 31 July 2010
  by Tom Igoe
- modified 23 Jun 2017
- by Wi6Labs
- modified 1 Jun 2018
- by sstaub
  */
 
-#include <LwIP.h>
-#include <STM32Ethernet.h>
+#include <Ethernet.h>
 // the sensor communicates using SPI, so include the library:
 #include <SPI.h>
 
 
+// assign a MAC address for the Ethernet controller.
+// fill in your address here:
+byte mac[] = {
+  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED
+};
 // assign an IP address for the controller:
 IPAddress ip(192, 168, 1, 20);
 
@@ -55,18 +58,43 @@ long pressure = 0;
 long lastReadingTime = 0;
 
 void setup() {
+  // You can use Ethernet.init(pin) to configure the CS pin
+  //Ethernet.init(10);  // Most Arduino shields
+  //Ethernet.init(5);   // MKR ETH shield
+  //Ethernet.init(0);   // Teensy 2.0
+  //Ethernet.init(20);  // Teensy++ 2.0
+  //Ethernet.init(15);  // ESP8266 with Adafruit Featherwing Ethernet
+  //Ethernet.init(33);  // ESP32 with Adafruit Featherwing Ethernet
+
   // start the SPI library:
   SPI.begin();
 
-  // start the Ethernet connection and the server:
-  Ethernet.begin(ip);
+  // start the Ethernet connection
+  Ethernet.begin(mac, ip);
+
+  // Open serial communications and wait for port to open:
+  Serial.begin(9600);
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
+  }
+
+  // Check for Ethernet hardware present
+  if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+    Serial.println("Ethernet shield was not found.  Sorry, can't run without hardware. :(");
+    while (true) {
+      delay(1); // do nothing, no point running without Ethernet hardware
+    }
+  }
+  if (Ethernet.linkStatus() == LinkOFF) {
+    Serial.println("Ethernet cable is not connected.");
+  }
+
+  // start listening for clients
   server.begin();
 
-  // initialize the  data ready and chip select pins:
+  // initalize the data ready and chip select pins:
   pinMode(dataReadyPin, INPUT);
   pinMode(chipSelectPin, OUTPUT);
-
-  Serial.begin(9600);
 
   //Configure SCP1000 for low noise configuration:
   writeRegister(0x02, 0x2D);
@@ -128,7 +156,7 @@ void listenForEthernetClients() {
   if (client) {
     Serial.println("Got a client");
     // an http request ends with a blank line
-    bool currentLineIsBlank = true;
+    boolean currentLineIsBlank = true;
     while (client.connected()) {
       if (client.available()) {
         char c = client.read();
