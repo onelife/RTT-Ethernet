@@ -3,7 +3,6 @@
 
 #include <inttypes.h>
 #include "IPAddress.h"
-#include "rtt.h"
 #include "EthernetClient.h"
 #include "EthernetServer.h"
 

@@ -4,7 +4,7 @@
  * @author  onelife <onelife.real[at]gmail.com>
  ******************************************************************************/
 LWIP_MALLOC_MEMPOOL_START
-LWIP_MALLOC_MEMPOOL(16, 365)
-LWIP_MALLOC_MEMPOOL(16, 730)
-LWIP_MALLOC_MEMPOOL(8, 1536)
+LWIP_MALLOC_MEMPOOL(16, 372)
+LWIP_MALLOC_MEMPOOL(16, 736)
+LWIP_MALLOC_MEMPOOL(4, 1540)
 LWIP_MALLOC_MEMPOOL_END

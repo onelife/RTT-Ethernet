@@ -37,7 +37,6 @@
   */
 
 #include "Arduino.h"
-#include "rtt.h"
 #include "stm32_eth.h"
 #include "lwip/sys.h"
 #include "lwip/tcpip.h"
@@ -134,6 +133,12 @@ void ethernet_thread(void *arg) {
       ethernetif_input(&gnetif);
     }
 
+    /* When Transmit Underflow flag is set, clear it and issue a Transmit Poll Demand to resume transmission */
+    if ((EthHandle.Instance->DMASR & ETH_DMASR_TUS) != (uint32_t)RESET) {
+      LWIP_DEBUGF(NETIF_DEBUG, ("Re-enable TX\n"));
+      ethernetif_output(&gnetif, NULL);
+    }
+
     /* Check ethernet link status */
     if ((HAL_GetTick() - gEhtLinkTickStart) >= TIME_CHECK_ETH_LINK_STATE) {
       ethernetif_set_link(&gnetif);
@@ -147,7 +152,7 @@ void ethernet_thread(void *arg) {
     stm32_DHCP_Periodic_Handle(&gnetif);
 #endif /* LWIP_DHCP */
 
-    rt_thread_sleep(CONFIG_TICK_PER_SECOND / 100);
+    sys_msleep(20);
   }
 }
 
@@ -536,7 +541,7 @@ int8_t stm32_dns_gethostbyname(const char *hostname, uint32_t *ipaddr)
           ret = -1;
           break;
         }
-        rt_thread_sleep(RT_TICK_PER_SECOND / 10);
+        sys_msleep(20);
       }
 
       if (ret == 0) {
@@ -632,29 +637,11 @@ void stm32_free_data(struct pbuf_data *data) {
     return;
   }
   while (!is_empty(&data->pbuf_queue)) {
-    stm32_free_pbuf((struct pbuf *)queue_get(&data->pbuf_queue));
+    pbuf_free((struct pbuf *)queue_get(&data->pbuf_queue));
   }
-  stm32_free_pbuf(data->p);
+  pbuf_free(data->p);
   data->available = 0;
   data->offset = 0;
-}
-
-/**
-  * @brief  Free pbuf
-  * @param  p: pointer to pbuf
-  * @retval return always NULL
-  */
-struct pbuf *stm32_free_pbuf(struct pbuf *p)
-{
-  uint16_t n;
-
-  if (p != NULL) {
-    do {
-      n = pbuf_free(p);
-    } while (n == 0);
-  }
-
-  return NULL;
 }
 
 /**
@@ -681,7 +668,7 @@ uint16_t stm32_get_data(struct pbuf_data *data, uint8_t *buffer, size_t size)
 
     if ((data->offset + 1) == data->p->tot_len) {
       /* Current "pbuf" done */
-      stm32_free_pbuf(data->p);
+      pbuf_free(data->p);
       data->offset = 0;
       data->p = (struct pbuf *)queue_get(&data->pbuf_queue);
     } else {
@@ -700,7 +687,7 @@ uint16_t stm32_get_data(struct pbuf_data *data, uint8_t *buffer, size_t size)
 
     if ((copied < to_copy) || ((data->offset + copied) == data->p->tot_len)) {
       /* Current "pbuf" done */
-      stm32_free_pbuf(data->p);
+      pbuf_free(data->p);
       data->offset = 0;
       data->p = (struct pbuf *)queue_get(&data->pbuf_queue);
       if (data->p == NULL)
@@ -904,7 +891,7 @@ static err_t tcp_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, 
       tcp_arg->data.offset = 0;
     } else {
       if (!queue_put(&tcp_arg->data.pbuf_queue, (void *)p)) {
-        LWIP_DEBUGF(NETIF_DEBUG, ("Client pbuf queue full\n"));
+        LWIP_DEBUGF(NETIF_DEBUG, ("* Client Q full\n"));
         pbuf_free(p);
       } else {
         tcp_arg->data.available += p->tot_len;
@@ -962,7 +949,7 @@ static void tcp_err_callback(void *arg, err_t err)
 {
   struct tcp_struct *tcp_arg = (struct tcp_struct *)arg;
 
-  LWIP_DEBUGF(NETIF_DEBUG, ("TCP ERR %d\n", err));
+  LWIP_DEBUGF(NETIF_DEBUG, ("TCP err %d\n", err));
   if (tcp_arg != NULL) {
     if (ERR_OK != err) {
       tcp_arg->pcb = NULL;
@@ -981,14 +968,20 @@ void tcp_connection_close(struct tcp_pcb *tpcb, struct tcp_struct *tcp)
 {
   LWIP_DEBUGF(NETIF_DEBUG, ("CLOSE %p %p\n", tpcb, tcp));
   /* remove callbacks */
+  tcp_accept(tpcb, NULL);
+  while (tcp_sndqueuelen(tpcb)) {
+    LWIP_DEBUGF(NETIF_DEBUG, ("Waitinf TX done %d (%d)\n", tcp_sndqueuelen(tpcb), tcp_sndbuf(tpcb)));
+    // tcp_output(tpcb);
+    sys_msleep(20);
+  }
   tcp_recv(tpcb, NULL);
   tcp_sent(tpcb, NULL);
   tcp_poll(tpcb, NULL, 0);
   tcp_err(tpcb, NULL);
-  tcp_accept(tpcb, NULL);
 
   /* close tcp connection */
   tcp_close(tpcb);
+  LWIP_DEBUGF(NETIF_DEBUG, ("CLOSE done\n"));
 
   tcp->pcb = NULL;
   tcp->state = TCP_CLOSING;

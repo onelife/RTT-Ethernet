@@ -56,6 +56,7 @@ extern "C" {
 uint8_t ethernetif_is_init(void);
 err_t ethernetif_init(struct netif *netif);
 void ethernetif_input(struct netif *netif);
+err_t ethernetif_output(struct netif *netif, struct pbuf *p);
 void ethernetif_set_link(struct netif *netif);
 void ethernetif_update_config(struct netif *netif);
 void ethernetif_notify_conn_changed(struct netif *netif);

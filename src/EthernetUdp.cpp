@@ -25,7 +25,7 @@
  *
  * bjoern@cs.stanford.edu 12/30/2008
  */
-#include "STM32Ethernet.h"
+#include "RttEthernet.h"
 #include "EthernetUdp.h"
 #include "Udp.h"
 
@@ -135,11 +135,13 @@ int EthernetUDP::endPacket()
 
   ip_addr_t ipaddr;
   if (ERR_OK != udp_sendto(_udp.pcb, _data, u8_to_ip_addr(rawIPAddress(_sendtoIP), &ipaddr), _sendtoPort)) {
-    _data = stm32_free_pbuf(_data);
+    pbuf_free(_data);
+    _data = NULL;
     return 0;
   }
 
-  _data = stm32_free_pbuf(_data);
+  pbuf_free(_data);
+  _data = NULL;
 
   return 1;
 }

@@ -2,7 +2,7 @@ extern "C" {
 #include "string.h"
 }
 
-#include "STM32Ethernet.h"
+#include "RttEthernet.h"
 #include "EthernetClient.h"
 #include "EthernetServer.h"
 

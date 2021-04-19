@@ -4,9 +4,11 @@ extern "C" {
 
 #include "Arduino.h"
 
-#include "STM32Ethernet.h"
+#include "RttEthernet.h"
 #include "EthernetClient.h"
 #include "EthernetServer.h"
+
+#include "lwip/sys.h"
 
 EthernetClient::EthernetClient()
   : _tcp_client(NULL)
@@ -77,7 +79,7 @@ int EthernetClient::connect(IPAddress ip, uint16_t port)
       stop();
       return 0;
     }
-    rt_thread_sleep(CONFIG_TICK_PER_SECOND / 100);
+    sys_msleep(20);
   }
 
   return 1;
@@ -119,12 +121,14 @@ size_t EthernetClient::write(const uint8_t *buf, size_t size)
         bytes_left = size - bytes_sent;
       } else if (res != ERR_MEM) {
         // other error, cannot continue
+        LWIP_DEBUGF(NETIF_DEBUG, ("Write err %d\n", res));
         return 0;
       }
     }
 
     //Force to send data right now!
     if (ERR_OK != tcp_output(_tcp_client->pcb)) {
+      LWIP_DEBUGF(NETIF_DEBUG, ("Output err\n"));
       return 0;
     }
 

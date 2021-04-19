@@ -113,7 +113,7 @@ struct tcp_struct {
 #define DHCP_ASK_RELEASE           (uint8_t) 6
 
 /* Maximum number of client per server */
-#define MAX_CLIENT  32
+#define MAX_CLIENT  8
 
 #ifdef ETH_INPUT_USE_IT
   extern struct netif gnetif;
@@ -161,7 +161,6 @@ uint32_t stm32_eth_get_dhcpaddr(void);
 
 struct pbuf *stm32_new_data(struct pbuf *p, const uint8_t *buffer, size_t size);
 void stm32_free_data(struct pbuf_data *data);
-struct pbuf *stm32_free_pbuf(struct pbuf *p);
 uint16_t stm32_get_data(struct pbuf_data *data, uint8_t *buffer, size_t size);
 
 ip_addr_t *u8_to_ip_addr(uint8_t *ipu8, ip_addr_t *ipaddr);

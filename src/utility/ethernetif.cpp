@@ -95,11 +95,6 @@ __ALIGN_BEGIN ETH_DMADescTypeDef  DMATxDscrTab[ETH_TXBUFNB] __ALIGN_END;/* Ether
 #endif
 __ALIGN_BEGIN uint8_t Rx_Buff[ETH_RXBUFNB * 2][ETH_RX_BUF_SIZE] __ALIGN_END; /* Ethernet Receive Buffer */
 
-// #if defined ( __ICCARM__ ) /*!< IAR Compiler */
-// #pragma data_alignment=4
-// #endif
-// __ALIGN_BEGIN uint8_t Tx_Buff[ETH_TXBUFNB][ETH_TX_BUF_SIZE] __ALIGN_END; /* Ethernet Transmit Buffer */
-
 ETH_HandleTypeDef EthHandle;
 
 static uint8_t macaddress[6] = { MAC_ADDR0, MAC_ADDR1, MAC_ADDR2, MAC_ADDR3, MAC_ADDR4, MAC_ADDR5 };
@@ -125,7 +120,9 @@ static void lwip_custom_pbuf_free(struct pbuf *p) {
 
   ret = queue_put(&rx_buf_queue, (void *)custom_p->buf);
   if (!ret) {
-    LWIP_DEBUGF(NETIF_DEBUG, ("RX buf queue full\n"));
+    LWIP_DEBUGF(NETIF_DEBUG, ("* RX Q full\n"));
+  } else {
+    LWIP_DEBUGF(NETIF_DEBUG, ("* RX Q+ %p\n", custom_p->buf));
   }
   LWIP_MEMPOOL_FREE(RX_POOL, custom_p);
 }
@@ -199,7 +196,7 @@ static void low_level_init(struct netif *netif)
   queue_init(rx_buf_queue, _rx_buf_queue);
   for (i = 0; i < ETH_RXBUFNB; i++) {
     queue_put(&rx_buf_queue, (void *)&Rx_Buff[ETH_RXBUFNB + i][0]);
-    LWIP_DEBUGF(NETIF_DEBUG, ("RX buf queue + %p\n", Rx_Buff[ETH_RXBUFNB + i]));
+    LWIP_DEBUGF(NETIF_DEBUG, ("* RX Q+ %p\n", Rx_Buff[ETH_RXBUFNB + i]));
   }
 
   EthHandle.Instance = ETH;
@@ -412,7 +409,7 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p)
     /* Put "pbuf" to free queue */
     if (!bufcount) {
       if (!queue_put(&tx_free_queue, (void *)p)) {
-        LWIP_DEBUGF(NETIF_DEBUG, ("TX free queue full\n"));
+        LWIP_DEBUGF(NETIF_DEBUG, ("* TX Q full\n"));
         errval = ENOBUFS;
         goto error;
       }
@@ -428,7 +425,7 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p)
   }
 
   /* Prepare transmit descriptors to give to DMA */
-  HAL_ETH_TransmitFrame2(&EthHandle, bufcount);
+  (void)HAL_ETH_TransmitFrame2(&EthHandle, bufcount);
 
   errval = ERR_OK;
 
@@ -487,28 +484,28 @@ static struct pbuf *low_level_input(struct netif *netif)
     /* Allocate "pbuf" */
     custom_p = (lwip_custom_pbuf_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
     if (custom_p == NULL) {
-      LWIP_DEBUGF(NETIF_DEBUG, ("RX_POOL pool empty\n"));
+      LWIP_DEBUGF(NETIF_DEBUG, ("* RX_POOL empty\n"));
       break;
     }
     custom_p->custom_p.custom_free_function = lwip_custom_pbuf_free;
     custom_p->buf = buffer;
     p = pbuf_alloced_custom(PBUF_RAW, len, PBUF_REF, &custom_p->custom_p, buffer, ETH_RX_BUF_SIZE);
     if (p == NULL) {
-      LWIP_DEBUGF(NETIF_DEBUG, ("PBUF_REF pool empty\n"));
+      LWIP_DEBUGF(NETIF_DEBUG, ("* PBUF_REF empty\n"));
       LWIP_MEMPOOL_FREE(RX_POOL, custom_p);
       break;
     }
 
     /* Allocate new buf */
     if (is_empty(&rx_buf_queue)) {
-      LWIP_DEBUGF(NETIF_DEBUG, ("RX buf queue empty\n"));
+      LWIP_DEBUGF(NETIF_DEBUG, ("* RX Q empty\n"));
       LWIP_MEMPOOL_FREE(RX_POOL, custom_p);
       p = NULL;
       break;
     }
     new_buf = queue_get(&rx_buf_queue);
-    LWIP_DEBUGF(NETIF_DEBUG, ("RX buf received %p (%d), %d\n", EthHandle.RxFrameInfos.FSRxDesc->Buffer1Addr, len, (rx_buf_queue.put_cnt - rx_buf_queue.get_cnt)));
-    LWIP_DEBUGF(NETIF_DEBUG, ("RX buf queue - %p\n", new_buf));
+    LWIP_DEBUGF(NETIF_DEBUG, ("RX %p (%d), %d\n", EthHandle.RxFrameInfos.FSRxDesc->Buffer1Addr, len, (rx_buf_queue.put_cnt - rx_buf_queue.get_cnt)));
+    LWIP_DEBUGF(NETIF_DEBUG, ("* RX Q- %p\n", new_buf));
     EthHandle.RxFrameInfos.FSRxDesc->Buffer1Addr = (uint32_t)new_buf;
   } while (0);
 
@@ -564,6 +561,11 @@ void ethernetif_input(struct netif *netif)
     p = NULL;
   }
 }
+
+err_t ethernetif_output(struct netif *netif, struct pbuf *p) {
+  return low_level_output(netif, p);
+}
+
 
 /**
   * @brief Returns the current state

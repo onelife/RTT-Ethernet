@@ -7,8 +7,8 @@
 #define __LWIPOPTS_DEFAULT_H__
 
 /* ---------- Debug options ---------- */
-#define LWIP_DEBUG                      1
-#define NETIF_DEBUG                     LWIP_DBG_ON
+#define LWIP_DEBUG
+// #define NETIF_DEBUG                     LWIP_DBG_ON
 // #define HTTPD_DEBUG                     LWIP_DBG_ON
 // #define TCPIP_DEBUG                     LWIP_DBG_ON
 // #define PBUF_DEBUG                      LWIP_DBG_ON
@@ -17,8 +17,15 @@
 // #define TCP_OUTPUT_DEBUG                LWIP_DBG_ON
 // #define ALTCP_WOLFSSL_DEBUG             LWIP_DBG_ON
 // #define ALTCP_WOLFSSL_MEM_DEBUG         LWIP_DBG_ON
-// #define LWIP_NOASSERT
-// #define LWIP_STATS                      0
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern void rt_kprintf(const char *fmt, ...);
+#ifdef __cplusplus
+}
+#endif
+#define LWIP_PLATFORM_DIAG(x)             do {rt_kprintf x;} while(0)
 
 /* ---------- Features ---------- */
 #define LWIP_ICMP                         1
@@ -27,10 +34,10 @@
 #define LWIP_DNS                          1
 #define LWIP_UDP                          1
 #define LWIP_TCP                          1
+#define LWIP_NETIF_API                    1
+// #define LWIP_STATS                      0
 
-// #define LWIP_NETIF_API                    1
-#define LWIP_NETCONN                      1
-#define LWIP_SOCKET                       1
+// #define LWIP_NOASSERT
 // #define LWIP_PROVIDE_ERRNO                /* defined in "cc.h" */
 
 /* ---------- TCP options ---------- */
@@ -43,12 +50,12 @@
 #define TCP_MSS                           (1500 - 40)
 /* TCP receive window. */
 #define TCP_WND                           (4 * TCP_MSS)
-#define TCP_SND_BUF                       (2 * TCP_MSS)
+#define TCP_SND_BUF                       (4 * TCP_MSS)
 #define TCP_SND_QUEUELEN                  (4 * TCP_SND_BUF / TCP_MSS)
 
 // #define TCP_OVERSIZE                      1
-// #define LWIP_WND_SCALE                    1
-// #define TCP_RCV_SCALE                     1
+#define LWIP_WND_SCALE                    1
+#define TCP_RCV_SCALE                     1
 
 /* ---------- NetIF options ---------- */
 #define LWIP_SINGLE_NETIF                 1
@@ -81,15 +88,16 @@
 /* ---------- Memory options ---------- */
 #define MEMP_MEM_INIT                     1
 #define MEM_ALIGNMENT                     4
+// #define MEMP_OVERFLOW_CHECK               1
 #define MEM_USE_POOLS                     1
 #define MEMP_USE_CUSTOM_POOLS             1
 // #define MEM_USE_POOLS_TRY_BIGGER_POOL   1
 
 #define MEMP_NUM_PBUF                     16
-#define MEMP_NUM_UDP_PCB                  8
-#define MEMP_NUM_TCP_PCB                  8
-#define MEMP_NUM_TCP_PCB_LISTEN           8
-#define MEMP_NUM_TCP_SEG                  8
+#define MEMP_NUM_UDP_PCB                  16
+#define MEMP_NUM_TCP_PCB                  32
+#define MEMP_NUM_TCP_PCB_LISTEN           4
+#define MEMP_NUM_TCP_SEG                  (TCP_SND_QUEUELEN)
 #define MEMP_NUM_SYS_TIMEOUT              8
 #define MEMP_NUM_NETBUF                   8
 #define MEMP_NUM_TCPIP_MSG_API            8
@@ -97,16 +105,16 @@
 
 /* ---------- Pbuf options ---------- */
 #define PBUF_POOL_SIZE                    16
-#define PBUF_POOL_BUFSIZE                 1524
 
 /* ---------- Checksum options ---------- */
 #define CHECKSUM_GEN_IP                   0
 #define CHECKSUM_GEN_UDP                  0
 #define CHECKSUM_GEN_TCP                  0
+#define CHECKSUM_GEN_ICMP                 0
 #define CHECKSUM_CHECK_IP                 0
 #define CHECKSUM_CHECK_UDP                0
 #define CHECKSUM_CHECK_TCP                0
-#define CHECKSUM_GEN_ICMP                 0
+#define CHECKSUM_CHECK_ICMP               0
 
 /* ---------- httpd options ---------- */
 #define LWIP_HTTPD_CGI                    0

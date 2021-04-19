@@ -1,4 +1,6 @@
-#include "STM32Ethernet.h"
+#include "RttEthernet.h"
+
+#include "lwip/sys.h"
 
 // Possible return codes from ProcessResponse
 #define SUCCESS          1
@@ -184,7 +186,7 @@ int EthernetClass::beginWithDHCP(unsigned long timeout)
       stm32_set_DHCP_state(DHCP_ASK_RELEASE);
       break;
     }
-    rt_thread_sleep(CONFIG_TICK_PER_SECOND / 10);
+    sys_msleep(20);
   }
 
   if (is_timeout) {
