@@ -69,6 +69,7 @@ int EthernetClient::connect(IPAddress ip, uint16_t port)
   _tcp_client->data.available = 0;
   _tcp_client->data.offset = 0;
   queue_init(_tcp_client->data.pbuf_queue, _tcp_client->data._pbuf_queue);
+  _tcp_client->is_accept = 0;
   _tcp_client->state = TCP_NONE;
 
   ip_addr_t ipaddr;
@@ -215,13 +216,16 @@ void EthernetClient::stop()
   }
 
   stm32_free_data(&(_tcp_client->data));
+  if (_tcp_client->is_accept) {
+    mem_free(_tcp_client);
+    _tcp_client = NULL;
+  }
 }
 
 uint8_t EthernetClient::connected()
 {
   uint8_t s = status();
-  return ((available() && (s == TCP_CLOSING)) ||
-          (s == TCP_CONNECTED) || (s == TCP_ACCEPTED));
+  return ((available() && (s == TCP_CLOSING)) || (s == TCP_CONNECTED) || (s == TCP_ACCEPTED));
 }
 
 uint8_t EthernetClient::status()
@@ -237,7 +241,8 @@ uint8_t EthernetClient::status()
 
 EthernetClient::operator bool()
 {
-  return (_tcp_client && (_tcp_client->state != TCP_CLOSING));
+  // return (_tcp_client && (_tcp_client->state != TCP_CLOSING));
+  return (_tcp_client != NULL);
 }
 
 bool EthernetClient::operator==(const EthernetClient &rhs)

@@ -147,7 +147,9 @@ void ethernet_thread(void *arg) {
 
     /* Check ethernet link status */
     if ((HAL_GetTick() - gEhtLinkTickStart) >= TIME_CHECK_ETH_LINK_STATE) {
+      LOCK_TCPIP_CORE();
       ethernetif_set_link(&gnetif);
+      UNLOCK_TCPIP_CORE();
       gEhtLinkTickStart = HAL_GetTick();
     }
 
@@ -818,6 +820,7 @@ err_t tcp_accept_callback(void *arg, struct tcp_pcb *newpcb, err_t err)
       client->data.available = 0;
       client->data.offset = 0;
       queue_init(client->data.pbuf_queue, client->data._pbuf_queue);
+      client->is_accept = 0;
 
       /* Looking for an empty socket */
       for (uint16_t i = 0; i < MAX_CLIENT; i++) {
@@ -949,7 +952,8 @@ static err_t tcp_sent_callback(void *arg, struct tcp_pcb *tpcb, u16_t len) {
 
 static err_t tcp_poll_callback(void *arg, struct tcp_pcb *tpcb) {
   // LOG_D("POLL %p %p", tpcb, arg);
-  // tcp_output(tpcb);
+  (void)arg;
+  (void)tcp_output(tpcb);
 
   return ERR_OK;
 }
@@ -972,6 +976,7 @@ static void tcp_err_callback(void *arg, err_t err) {
     if (ERR_OK != err) {
       tcp_arg->pcb = NULL;
       tcp_arg->state = TCP_CLOSING;
+      LOG_D("TCP_CLOSING");
     }
   }
 }

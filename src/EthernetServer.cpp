@@ -46,7 +46,7 @@ void EthernetServer::begin()
   UNLOCK_TCPIP_CORE();
 }
 
-void EthernetServer::accept()
+void EthernetServer::checkClient()
 {
   /* Free client if disconnected */
   for (int n = 0; n < MAX_CLIENT; n++) {
@@ -61,9 +61,31 @@ void EthernetServer::accept()
   }
 }
 
+EthernetClient EthernetServer::accept()
+{
+  checkClient();
+
+  for (int n = 0; n < MAX_CLIENT; n++) {
+    if (_tcp_client[n] != NULL) {
+      if (_tcp_client[n]->pcb != NULL) {
+        EthernetClient client(_tcp_client[n]);
+        uint8_t s = client.status();
+        if (s == TCP_ACCEPTED) {
+          _tcp_client[n]->is_accept = 1;
+          _tcp_client[n] = NULL;
+          return client;
+        }
+      }
+    }
+  }
+
+  struct tcp_struct *default_client = NULL;
+  return EthernetClient(default_client);
+}
+
 EthernetClient EthernetServer::available()
 {
-  accept();
+  checkClient();
 
   for (int n = 0; n < MAX_CLIENT; n++) {
     if (_tcp_client[n] != NULL) {
@@ -92,7 +114,7 @@ size_t EthernetServer::write(const uint8_t *buffer, size_t size)
 {
   size_t n = 0;
 
-  accept();
+  checkClient();
 
   for (int n = 0; n < MAX_CLIENT; n++) {
     if (_tcp_client[n] != NULL) {

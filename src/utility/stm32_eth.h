@@ -82,6 +82,7 @@ struct tcp_struct {
   struct tcp_pcb *pcb;          /* pointer on the current tcp_pcb */
   struct pbuf_data data;
   tcp_client_states state;      /* current connection state */
+  uint8_t is_accept;
 };
 
 /* Exported constants --------------------------------------------------------*/

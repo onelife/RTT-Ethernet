@@ -12,9 +12,10 @@ class EthernetServer :
     struct tcp_struct _tcp_server;
     struct tcp_struct *_tcp_client[MAX_CLIENT];
 
-    void accept(void);
+    void checkClient(void);
   public:
     EthernetServer(uint16_t port = 80);
+    EthernetClient accept();
     EthernetClient available();
     virtual void begin();
     virtual size_t write(uint8_t);
