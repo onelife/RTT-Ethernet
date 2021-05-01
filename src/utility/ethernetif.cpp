@@ -53,6 +53,7 @@
 #include <string.h>
 #include "PeripheralPins.h"
 #include "lwip/igmp.h"
+#include "lwip/tcpip.h"
 #include "stm32_eth.h"
 #if !defined(STM32_CORE_VERSION) || (STM32_CORE_VERSION  <= 0x01050000)
   #include "variant.h"
@@ -61,6 +62,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define LOG_TAG "ETH_IF"
+#include <log.h>
 
 /* Private typedef -----------------------------------------------------------*/
 typedef struct lwip_custom_pbuf {
@@ -120,11 +124,15 @@ static void lwip_custom_pbuf_free(struct pbuf *p) {
 
   ret = queue_put(&rx_buf_queue, (void *)custom_p->buf);
   if (!ret) {
-    LWIP_DEBUGF(NETIF_DEBUG, ("* RX Q full\n"));
+    LOG_E("RX Q full");
   } else {
-    LWIP_DEBUGF(NETIF_DEBUG, ("* RX Q+ %p\n", custom_p->buf));
+    LOG_D("RX Q+ %p", custom_p->buf);
   }
   LWIP_MEMPOOL_FREE(RX_POOL, custom_p);
+}
+
+void hello2(void) {
+  rt_kprintf("hello\n");
 }
 
 /*******************************************************************************
@@ -183,8 +191,7 @@ void HAL_ETH_MspInit(ETH_HandleTypeDef *heth)
   * @param netif the already initialized lwip network interface structure
   *        for this ethernetif
   */
-static void low_level_init(struct netif *netif)
-{
+static void low_level_init(struct netif *netif) {
   uint32_t regvalue;
   uint32_t i;
 
@@ -196,7 +203,7 @@ static void low_level_init(struct netif *netif)
   queue_init(rx_buf_queue, _rx_buf_queue);
   for (i = 0; i < ETH_RXBUFNB; i++) {
     queue_put(&rx_buf_queue, (void *)&Rx_Buff[ETH_RXBUFNB + i][0]);
-    LWIP_DEBUGF(NETIF_DEBUG, ("* RX Q+ %p\n", Rx_Buff[ETH_RXBUFNB + i]));
+    LOG_D("RX Q+ %p", Rx_Buff[ETH_RXBUFNB + i]);
   }
 
   EthHandle.Instance = ETH;
@@ -310,7 +317,7 @@ HAL_StatusTypeDef HAL_ETH_TransmitFrame2(ETH_HandleTypeDef *heth, uint32_t bufco
     /* Set Own bit of the Tx descriptor Status: gives the buffer back to ETHERNET DMA */
     heth->TxDesc->Status |= ETH_DMATXDESC_OWN;
     /* Point to next descriptor */
-    heth->TxDesc= (ETH_DMADescTypeDef *)(heth->TxDesc->Buffer2NextDescAddr);
+    heth->TxDesc = (ETH_DMADescTypeDef *)(heth->TxDesc->Buffer2NextDescAddr);
   } else {
     for (i = 0; i < bufcount; i++) {
       /* Clear FIRST and LAST segment bits */
@@ -364,8 +371,7 @@ HAL_StatusTypeDef HAL_ETH_TransmitFrame2(ETH_HandleTypeDef *heth, uint32_t bufco
   *       to become available since the stack doesn't retry to send a packet
   *       dropped because of memory failure (except for the TCP timers).
   */
-static err_t low_level_output(struct netif *netif, struct pbuf *p)
-{
+static err_t low_level_output(struct netif *netif, struct pbuf *p) {
   err_t errval;
   struct pbuf *q;
   __IO ETH_DMADescTypeDef *DmaTxDesc;
@@ -377,12 +383,16 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p)
   /* Check if all done */
   DmaTxDesc = EthHandle.TxDesc;
   for (i = 0; i < ETH_TXBUFNB; i++) {
+    // LOG_D("output chk %d %08x %08x", i, DmaTxDesc, DmaTxDesc->Status);
     if ((DmaTxDesc->Status & ETH_DMATXDESC_OWN) != (uint32_t)RESET) {
       break;
     }
 
     /* Point to next descriptor */
     DmaTxDesc = (ETH_DMADescTypeDef *)(DmaTxDesc->Buffer2NextDescAddr);
+  }
+  if (i != ETH_TXBUFNB) {
+    LOG_D("output chk %d/%d", i, ETH_TXBUFNB);
   }
 
   /* Free "pbuf" */
@@ -391,25 +401,33 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p)
     pbuf_free(q);
   }
 
+  if (pbuf_clen(p) > ETH_TXBUFNB) {
+      errval = ENOBUFS;
+      LOG_E("output ENOBUFS");
+      goto error;
+  }
+
   /* Prepare DMA buffers */
   DmaTxDesc = EthHandle.TxDesc;
   for (q = p; q != NULL; q = q->next) {
     /* Is this buffer available? If not, goto error */
     if ((DmaTxDesc->Status & ETH_DMATXDESC_OWN) != (uint32_t)RESET) {
       errval = ERR_USE;
+      LOG_E("output ERR_USE");
       goto error;
     }
 
     /* Check if the length of data is bigger than Tx buffer size*/
     if (q->len > ETH_TX_BUF_SIZE) {
       errval = ENOBUFS;
+      LOG_E("output ENOBUFS2");
       goto error;
     }
 
     /* Put "pbuf" to free queue */
     if (!bufcount) {
       if (!queue_put(&tx_free_queue, (void *)p)) {
-        LWIP_DEBUGF(NETIF_DEBUG, ("* TX Q full\n"));
+        LOG_E("TX Q full");
         errval = ENOBUFS;
         goto error;
       }
@@ -477,35 +495,35 @@ static struct pbuf *low_level_input(struct netif *netif)
        - EthHandle.RxFrameInfos.SegCount == 1
      */
     if ((len == 0) || (len > ETH_RX_BUF_SIZE) || (EthHandle.RxFrameInfos.SegCount != 1)) {
-      LWIP_DEBUGF(NETIF_DEBUG, ("Unexpected SegCount %d\n", EthHandle.RxFrameInfos.SegCount));
+      LOG_E("Unexpected SegCount %d", EthHandle.RxFrameInfos.SegCount);
       break;
     }
 
     /* Allocate "pbuf" */
     custom_p = (lwip_custom_pbuf_t *)LWIP_MEMPOOL_ALLOC(RX_POOL);
     if (custom_p == NULL) {
-      LWIP_DEBUGF(NETIF_DEBUG, ("* RX_POOL empty\n"));
+      LOG_E("RX_POOL empty");
       break;
     }
     custom_p->custom_p.custom_free_function = lwip_custom_pbuf_free;
     custom_p->buf = buffer;
     p = pbuf_alloced_custom(PBUF_RAW, len, PBUF_REF, &custom_p->custom_p, buffer, ETH_RX_BUF_SIZE);
     if (p == NULL) {
-      LWIP_DEBUGF(NETIF_DEBUG, ("* PBUF_REF empty\n"));
+      LOG_E("PBUF_REF empty");
       LWIP_MEMPOOL_FREE(RX_POOL, custom_p);
       break;
     }
 
     /* Allocate new buf */
     if (is_empty(&rx_buf_queue)) {
-      LWIP_DEBUGF(NETIF_DEBUG, ("* RX Q empty\n"));
+      LOG_E("RX Q empty");
       LWIP_MEMPOOL_FREE(RX_POOL, custom_p);
       p = NULL;
       break;
     }
     new_buf = queue_get(&rx_buf_queue);
-    LWIP_DEBUGF(NETIF_DEBUG, ("RX %p (%d), %d\n", EthHandle.RxFrameInfos.FSRxDesc->Buffer1Addr, len, (rx_buf_queue.put_cnt - rx_buf_queue.get_cnt)));
-    LWIP_DEBUGF(NETIF_DEBUG, ("* RX Q- %p\n", new_buf));
+    // LOG_D("RX %p (%d), %d", EthHandle.RxFrameInfos.FSRxDesc->Buffer1Addr, len, (rx_buf_queue.put_cnt - rx_buf_queue.get_cnt));
+    LOG_D("RX Q- %p", new_buf);
     EthHandle.RxFrameInfos.FSRxDesc->Buffer1Addr = (uint32_t)new_buf;
   } while (0);
 
@@ -540,26 +558,26 @@ static struct pbuf *low_level_input(struct netif *netif)
   *
   * @param netif the lwip network interface structure for this ethernetif
   */
-void ethernetif_input(struct netif *netif)
-{
+void ethernetif_input(struct netif *netif) {
   err_t err;
-  struct pbuf *p;
+  struct pbuf *p = NULL;
 
-  /* move received packet into a new pbuf */
-  p = low_level_input(netif);
+  do {
+    /* move received packet into a new pbuf */
+    p = low_level_input(netif);
+    if (p == NULL) {
+      /* no packet could be read, silently ignore this */
+      break;
+    }
 
-  /* no packet could be read, silently ignore this */
-  if (p == NULL) {
-    return;
-  }
-
-  /* entry point to the LwIP stack */
-  err = netif->input(p, netif);
-  if (err != ERR_OK) {
-    // LWIP_DEBUGF(NETIF_DEBUG, ("netif->input err: %d\n", err));
-    pbuf_free(p);
-    p = NULL;
-  }
+    /* pass Ethernet package to LwIP stack */
+    err = netif->input(p, netif);
+    if (err != ERR_OK) {
+      // LOG_E("netif->input err: %d", err);
+      pbuf_free(p);
+      continue;
+    }
+  } while (p != NULL);
 }
 
 err_t ethernetif_output(struct netif *netif, struct pbuf *p) {
@@ -652,7 +670,9 @@ void ethernetif_set_link(struct netif *netif)
       igmp_start(netif);
     }
 #endif
+    LOCK_TCPIP_CORE();
     netif_set_link_up(netif);
+    UNLOCK_TCPIP_CORE();
   }
 }
 
@@ -736,11 +756,11 @@ void ethernetif_status_changed(struct netif *netif) {
     return;
   addr = stm32_eth_get_ipaddr();
   if (addr) {
-    LWIP_DEBUGF(NETIF_DEBUG, ("Current IP: %lu.%lu.%lu.%lu\n",
+    LOG_D("Current IP: %lu.%lu.%lu.%lu",
       (addr >>  0) & 0x000000ff,
       (addr >>  8) & 0x000000ff,
       (addr >> 16) & 0x000000ff,
-      (addr >> 24) & 0x000000ff));
+      (addr >> 24) & 0x000000ff);
   }
 }
 

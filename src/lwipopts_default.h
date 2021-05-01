@@ -7,7 +7,8 @@
 #define __LWIPOPTS_DEFAULT_H__
 
 /* ---------- Debug options ---------- */
-#define LWIP_DEBUG
+#define LWIP_DEBUG 
+// #define TCP_QLEN_DEBUG               	LWIP_DBG_ON
 // #define NETIF_DEBUG                     LWIP_DBG_ON
 // #define HTTPD_DEBUG                     LWIP_DBG_ON
 // #define TCPIP_DEBUG                     LWIP_DBG_ON
@@ -17,6 +18,23 @@
 // #define TCP_OUTPUT_DEBUG                LWIP_DBG_ON
 // #define ALTCP_WOLFSSL_DEBUG             LWIP_DBG_ON
 // #define ALTCP_WOLFSSL_MEM_DEBUG         LWIP_DBG_ON
+#define LOG_LVL LOG_LVL_INFO
+
+#define LWIP_MARK_TCPIP_THREAD() { \
+  extern uint32_t tcpip_started; \
+  tcpip_started = 1; \
+}
+
+#define LWIP_ASSERT_CORE_LOCKED() { \
+  extern void *lock_tcpip_core; \
+  extern uint32_t tcpip_started; \
+  extern void hello2(void); \
+  if (tcpip_started && !*((uint8_t *)lock_tcpip_core + 39)) { \
+    rt_kprintf("!!! CORE_LOCK: %x\n", *((uint8_t *)lock_tcpip_core + 39)); \
+    hello2(); \
+  } \
+}
+  // LWIP_ASSERT("TCPIP core lock is not held", (tcpip_started && *((uint8_t *)lock_tcpip_core + 39)));
 
 #ifdef __cplusplus
 extern "C" {
@@ -67,8 +85,8 @@ extern void rt_kprintf(const char *fmt, ...);
 #define LWIP_TCP_KEEPALIVE                1 /* Important for MQTT/TLS */
 
 /* ---------- SYS options ---------- */
-#define TCPIP_THREAD_STACKSIZE            1024
-#define ETHERNET_THREAD_STACKSIZE         512
+#define TCPIP_THREAD_STACKSIZE            (512 * 3)
+#define ETHERNET_THREAD_STACKSIZE         (512 * 2)
 /**
  * In CMSIS OS API, bigger priority number means higher priority.
  * In RT-Thread, smaller priority number means higher priority.
@@ -95,9 +113,9 @@ extern void rt_kprintf(const char *fmt, ...);
 
 #define MEMP_NUM_PBUF                     16
 #define MEMP_NUM_UDP_PCB                  16
-#define MEMP_NUM_TCP_PCB                  32
+#define MEMP_NUM_TCP_PCB                  16
 #define MEMP_NUM_TCP_PCB_LISTEN           4
-#define MEMP_NUM_TCP_SEG                  (TCP_SND_QUEUELEN)
+#define MEMP_NUM_TCP_SEG                  16 //(TCP_SND_QUEUELEN)
 #define MEMP_NUM_SYS_TIMEOUT              8
 #define MEMP_NUM_NETBUF                   8
 #define MEMP_NUM_TCPIP_MSG_API            8
@@ -105,6 +123,8 @@ extern void rt_kprintf(const char *fmt, ...);
 
 /* ---------- Pbuf options ---------- */
 #define PBUF_POOL_SIZE                    16
+#define LWIP_SUPPORT_CUSTOM_PBUF          1
+#define LWIP_NETIF_TX_SINGLE_PBUF         1
 
 /* ---------- Checksum options ---------- */
 #define CHECKSUM_GEN_IP                   0

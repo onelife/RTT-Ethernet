@@ -31,6 +31,7 @@
 
 #include "lwip/igmp.h"
 #include "lwip/ip_addr.h"
+#include "lwip/tcpip.h"
 
 /* Constructor */
 EthernetUDP::EthernetUDP() {}
@@ -49,8 +50,9 @@ uint8_t EthernetUDP::begin(IPAddress ip, uint16_t port, bool multicast)
     return 0;
   }
 
+  LOCK_TCPIP_CORE();
   _udp.pcb = udp_new();
-
+  UNLOCK_TCPIP_CORE();
   if (_udp.pcb == NULL) {
     return 0;
   }
@@ -58,23 +60,31 @@ uint8_t EthernetUDP::begin(IPAddress ip, uint16_t port, bool multicast)
   ip_addr_t ipaddr;
   err_t err;
   u8_to_ip_addr(rawIPAddress(ip), &ipaddr);
+
+  LOCK_TCPIP_CORE();
   if (multicast) {
     err = udp_bind(_udp.pcb, IP_ADDR_ANY, port);
   } else {
     err = udp_bind(_udp.pcb, &ipaddr, port);
   }
-
+  UNLOCK_TCPIP_CORE();
   if (ERR_OK != err) {
     stop();
     return 0;
   }
 
 #if LWIP_IGMP
-  if ((multicast) && (ERR_OK != igmp_joingroup(IP_ADDR_ANY, &ipaddr))) {
+  err_t ret;
+  LOCK_TCPIP_CORE();
+  ret = igmp_joingroup(IP_ADDR_ANY, &ipaddr);
+  UNLOCK_TCPIP_CORE();
+  if ((multicast) && (ERR_OK != ret)) {
     return 0;
   }
 #endif
+  LOCK_TCPIP_CORE();
   udp_recv(_udp.pcb, &udp_receive_callback, &_udp);
+  UNLOCK_TCPIP_CORE();
 
   _port = port;
   _remaining = 0;
@@ -93,8 +103,10 @@ int EthernetUDP::available()
 void EthernetUDP::stop()
 {
   if (_udp.pcb != NULL) {
+    LOCK_TCPIP_CORE();
     udp_disconnect(_udp.pcb);
     udp_remove(_udp.pcb);
+    UNLOCK_TCPIP_CORE();
     _udp.pcb = NULL;
   }
 }
@@ -121,8 +133,9 @@ int EthernetUDP::beginPacket(IPAddress ip, uint16_t port)
 
   _sendtoIP = ip;
   _sendtoPort = port;
-
+  LOCK_TCPIP_CORE();
   udp_recv(_udp.pcb, &udp_receive_callback, &_udp);
+  UNLOCK_TCPIP_CORE();
 
   return 1;
 }
@@ -134,7 +147,12 @@ int EthernetUDP::endPacket()
   }
 
   ip_addr_t ipaddr;
-  if (ERR_OK != udp_sendto(_udp.pcb, _data, u8_to_ip_addr(rawIPAddress(_sendtoIP), &ipaddr), _sendtoPort)) {
+  err_t ret;
+
+  LOCK_TCPIP_CORE();
+  ret = udp_sendto(_udp.pcb, _data, u8_to_ip_addr(rawIPAddress(_sendtoIP), &ipaddr), _sendtoPort);
+  UNLOCK_TCPIP_CORE();
+  if (ERR_OK != ret) {
     pbuf_free(_data);
     _data = NULL;
     return 0;

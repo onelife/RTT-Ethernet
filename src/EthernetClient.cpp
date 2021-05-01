@@ -9,6 +9,10 @@ extern "C" {
 #include "EthernetServer.h"
 
 #include "lwip/sys.h"
+#include "lwip/tcpip.h"
+
+#define LOG_TAG "ETH_CLI"
+#include <log.h>
 
 EthernetClient::EthernetClient()
   : _tcp_client(NULL)
@@ -47,15 +51,16 @@ int EthernetClient::connect(IPAddress ip, uint16_t port)
   if (_tcp_client == NULL) {
     /* Allocates memory for client */
     _tcp_client = (struct tcp_struct *)mem_malloc(sizeof(struct tcp_struct));
-
     if (_tcp_client == NULL) {
       return 0;
     }
   }
 
   /* Creates a new TCP protocol control block */
+  LOCK_TCPIP_CORE();
   _tcp_client->pcb = tcp_new();
-
+  UNLOCK_TCPIP_CORE();
+  LOG_D("new tcp %p %p", _tcp_client->pcb, _tcp_client->pcb->unacked);
   if (_tcp_client->pcb == NULL) {
     return 0;
   }
@@ -67,8 +72,13 @@ int EthernetClient::connect(IPAddress ip, uint16_t port)
   _tcp_client->state = TCP_NONE;
 
   ip_addr_t ipaddr;
+  err_t ret;
+  LOCK_TCPIP_CORE();
   tcp_arg(_tcp_client->pcb, _tcp_client);
-  if (ERR_OK != tcp_connect(_tcp_client->pcb, u8_to_ip_addr(rawIPAddress(ip), &ipaddr), port, &tcp_connected_callback)) {
+  ret = tcp_connect(_tcp_client->pcb, u8_to_ip_addr(rawIPAddress(ip), &ipaddr), port, &tcp_connected_callback);
+  UNLOCK_TCPIP_CORE();
+  if (ERR_OK != ret) {
+    LOG_E("tcp_connect err %d", ret);
     stop();
     return 0;
   }
@@ -114,21 +124,25 @@ size_t EthernetClient::write(const uint8_t *buf, size_t size)
     bytes_to_send = bytes_left > max_send_size ? max_send_size : bytes_left;
 
     if (bytes_to_send > 0) {
-      res = tcp_write(_tcp_client->pcb, &buf[bytes_sent], bytes_to_send,  TCP_WRITE_FLAG_COPY);
-
+      LOCK_TCPIP_CORE();
+      res = tcp_write(_tcp_client->pcb, &buf[bytes_sent], bytes_to_send, TCP_WRITE_FLAG_COPY);
+      UNLOCK_TCPIP_CORE();
       if (res == ERR_OK) {
         bytes_sent += bytes_to_send;
         bytes_left = size - bytes_sent;
       } else if (res != ERR_MEM) {
         // other error, cannot continue
-        LWIP_DEBUGF(NETIF_DEBUG, ("Write err %d\n", res));
+        LOG_E("Write err %d", res);
         return 0;
       }
     }
 
     //Force to send data right now!
-    if (ERR_OK != tcp_output(_tcp_client->pcb)) {
-      LWIP_DEBUGF(NETIF_DEBUG, ("Output err\n"));
+    LOCK_TCPIP_CORE();
+    res = tcp_output(_tcp_client->pcb);
+    UNLOCK_TCPIP_CORE();
+    if (ERR_OK != res) {
+      LOG_E("Output err");
       return 0;
     }
 
@@ -180,7 +194,9 @@ void EthernetClient::flush()
   if ((_tcp_client == NULL) || (_tcp_client->pcb == NULL)) {
     return;
   }
-  tcp_output(_tcp_client->pcb);
+  LOCK_TCPIP_CORE();
+  (void)tcp_output(_tcp_client->pcb);
+  UNLOCK_TCPIP_CORE();
 }
 
 void EthernetClient::stop()

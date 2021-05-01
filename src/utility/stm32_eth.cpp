@@ -48,6 +48,9 @@
 #include "lwip/prot/dhcp.h"
 #include "lwip/dns.h"
 
+#define LOG_TAG "STM_ETH"
+#include <log.h>
+
 /* Check ethernet link status every seconds */
 #define TIME_CHECK_ETH_LINK_STATE 500U
 
@@ -82,10 +85,14 @@ static uint8_t DHCP_Started_by_user = 0;
 /* Ethernet link status periodic timer */
 static uint32_t gEhtLinkTickStart = 0;
 
+/* tcpip_thread set the value to 1 after started */
+uint32_t tcpip_started = 0;
+
 /*************************** Function prototype *******************************/
 static void tcpip_init_done(void *arg);
 static err_t tcp_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err);
 static err_t tcp_sent_callback(void *arg, struct tcp_pcb *tpcb, u16_t len);
+static err_t tcp_poll_callback(void *arg, struct tcp_pcb *tpcb);
 static void tcp_err_callback(void *arg, err_t err);
 
 /**
@@ -125,17 +132,16 @@ void ethernet_thread(void *arg) {
   extern ETH_HandleTypeDef EthHandle;
   (void)arg;
 
-  LWIP_DEBUGF(NETIF_DEBUG, ("Start ethernet_thread\n"));
   while (1) {
     /* Check RX status */
     if ((EthHandle.Instance->DMASR & ETH_DMASR_RBUS) != (uint32_t)RESET) {
-      LWIP_DEBUGF(NETIF_DEBUG, ("Re-enable RX\n"));
+      LOG_D("Re-enable RX");
       ethernetif_input(&gnetif);
     }
 
     /* When Transmit Underflow flag is set, clear it and issue a Transmit Poll Demand to resume transmission */
     if ((EthHandle.Instance->DMASR & ETH_DMASR_TUS) != (uint32_t)RESET) {
-      LWIP_DEBUGF(NETIF_DEBUG, ("Re-enable TX\n"));
+      LOG_D("Re-enable TX");
       ethernetif_output(&gnetif, NULL);
     }
 
@@ -255,7 +261,9 @@ void stm32_DHCP_process(struct netif *netif)
           ip_addr_set_zero_ip4(&netif->netmask);
           ip_addr_set_zero_ip4(&netif->gw);
           DHCP_state = DHCP_WAIT_ADDRESS;
+          LOCK_TCPIP_CORE();
           dhcp_start(netif);
+          UNLOCK_TCPIP_CORE();
         }
         break;
 
@@ -268,26 +276,22 @@ void stm32_DHCP_process(struct netif *netif)
             /* DHCP timeout */
             if (dhcp->tries > MAX_DHCP_TRIES) {
               DHCP_state = DHCP_TIMEOUT;
-
               // If DHCP address not bind, keep DHCP stopped
               DHCP_Started_by_user = 0;
-
               /* Stop DHCP */
-              dhcp_stop(netif);
+              LOCK_TCPIP_CORE();
+              dhcp_release_and_stop(netif);
+              UNLOCK_TCPIP_CORE();
             }
           }
         }
         break;
-      case DHCP_ASK_RELEASE: {
-          /* Force release */
-          dhcp_release(netif);
-          dhcp_stop(netif);
-          DHCP_state = DHCP_OFF;
-        }
-        break;
+      case DHCP_ASK_RELEASE:
       case DHCP_LINK_DOWN: {
-          /* Stop DHCP */
-          dhcp_stop(netif);
+          /* Force release or Stop DHCP */
+          LOCK_TCPIP_CORE();
+          dhcp_release_and_stop(netif);
+          UNLOCK_TCPIP_CORE();
           DHCP_state = DHCP_OFF;
         }
         break;
@@ -318,9 +322,10 @@ void stm32_DHCP_Periodic_Handle(struct netif *netif)
   * @param  None
   * @retval None
   */
-void stm32_DHCP_manual_config(void)
-{
+void stm32_DHCP_manual_config(void) {
+  LOCK_TCPIP_CORE();
   dhcp_inform(&gnetif);
+  UNLOCK_TCPIP_CORE();
 }
 
 /**
@@ -442,7 +447,7 @@ void ethernetif_notify_conn_changed(struct netif *netif)
 
     /* When the netif is fully configured this function must be called.*/
     netif_set_up(netif);
-    LWIP_DEBUGF(NETIF_DEBUG, ("Link UP\n"));
+    LOG_I("Link UP\n");
   } else {
     /* Update DHCP state machine if DHCP used */
     if (DHCP_Started_by_user == 1) {
@@ -451,7 +456,7 @@ void ethernetif_notify_conn_changed(struct netif *netif)
 
     /*  When the netif link is down this function must be called.*/
     netif_set_down(netif);
-    LWIP_DEBUGF(NETIF_DEBUG, ("Link DOWN\n"));
+    LOG_I("Link DOWN\n");
   }
 }
 
@@ -526,7 +531,9 @@ int8_t stm32_dns_gethostbyname(const char *hostname, uint32_t *ipaddr)
   int8_t ret = 0;
 
   *ipaddr = 0;
+  LOCK_TCPIP_CORE();
   err = dns_gethostbyname(hostname, &iphost, &dns_callback, ipaddr);
+  UNLOCK_TCPIP_CORE();
 
   switch (err) {
     case ERR_OK:
@@ -639,7 +646,9 @@ void stm32_free_data(struct pbuf_data *data) {
   while (!is_empty(&data->pbuf_queue)) {
     pbuf_free((struct pbuf *)queue_get(&data->pbuf_queue));
   }
-  pbuf_free(data->p);
+  if (data->p) {
+    pbuf_free(data->p);
+  }
   data->available = 0;
   data->offset = 0;
 }
@@ -763,6 +772,9 @@ err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err)
       /* initialize LwIP tcp_sent callback function */
       tcp_sent(tpcb, tcp_sent_callback);
 
+      /* initialize LwIP tcp_poll callback function */
+      tcp_poll(tpcb, tcp_poll_callback, 2);
+
       /* initialize LwIP tcp_err callback function */
       tcp_err(tpcb, tcp_err_callback);
 
@@ -812,7 +824,6 @@ err_t tcp_accept_callback(void *arg, struct tcp_pcb *newpcb, err_t err)
         if (tcpClient[i] == NULL) {
           tcpClient[i] = client;
           accepted = 1;
-          LWIP_DEBUGF(NETIF_DEBUG, ("ACCEPT %d\n", i));
           break;
         }
       }
@@ -829,6 +840,9 @@ err_t tcp_accept_callback(void *arg, struct tcp_pcb *newpcb, err_t err)
 
         /* initialize LwIP tcp_sent callback function */
         tcp_sent(newpcb, tcp_sent_callback);
+
+        /* initialize LwIP tcp_poll callback function */
+        tcp_poll(newpcb, tcp_poll_callback, 2);
 
         ret_err = ERR_OK;
       } else {
@@ -848,7 +862,9 @@ err_t tcp_accept_callback(void *arg, struct tcp_pcb *newpcb, err_t err)
       ret_err = ERR_MEM;
     }
   } else {
-    tcp_close(newpcb);
+    if (ERR_OK != tcp_close(newpcb)) {
+      tcp_abort(newpcb);
+    }
     ret_err = ERR_ARG;
   }
   return ret_err;
@@ -876,14 +892,13 @@ static err_t tcp_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, 
   else if (err != ERR_OK) {
     /* free received pbuf*/
     if (p != NULL) {
-      LWIP_DEBUGF(NETIF_DEBUG, ("RECV err %d\n", err));
+      LOG_E("TCP recv err %d", err);
       pbuf_free(p);
     }
     ret_err = err;
   } else if ((tcp_arg->state == TCP_CONNECTED) || (tcp_arg->state == TCP_ACCEPTED)) {
     /* Acknowledge data reception */
     tcp_recved(tpcb, p->tot_len);
-    LWIP_DEBUGF(NETIF_DEBUG, ("RECV %d\n", p->tot_len));
 
     if (tcp_arg->data.p == NULL) {
       tcp_arg->data.p = p;
@@ -891,7 +906,7 @@ static err_t tcp_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, 
       tcp_arg->data.offset = 0;
     } else {
       if (!queue_put(&tcp_arg->data.pbuf_queue, (void *)p)) {
-        LWIP_DEBUGF(NETIF_DEBUG, ("* Client Q full\n"));
+        LOG_E("Client Q full");
         pbuf_free(p);
       } else {
         tcp_arg->data.available += p->tot_len;
@@ -902,7 +917,6 @@ static err_t tcp_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, 
   }
   /* data received when connection already closed */
   else {
-    LWIP_DEBUGF(NETIF_DEBUG, ("CLOSE\n"));
     /* Acknowledge data reception */
     tcp_recved(tpcb, p->tot_len);
 
@@ -921,11 +935,9 @@ static err_t tcp_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, 
   * @param  len: length of data sent
   * @retval err_t: returned error code
   */
-static err_t tcp_sent_callback(void *arg, struct tcp_pcb *tpcb, u16_t len)
-{
+static err_t tcp_sent_callback(void *arg, struct tcp_pcb *tpcb, u16_t len) {
   struct tcp_struct *tcp_arg = (struct tcp_struct *)arg;
 
-  LWIP_DEBUGF(NETIF_DEBUG, ("SENT %d\n", len));
   LWIP_UNUSED_ARG(len);
 
   if ((tcp_arg != NULL) && (tcp_arg->pcb == tpcb)) {
@@ -933,6 +945,13 @@ static err_t tcp_sent_callback(void *arg, struct tcp_pcb *tpcb, u16_t len)
   }
 
   return ERR_ARG;
+}
+
+static err_t tcp_poll_callback(void *arg, struct tcp_pcb *tpcb) {
+  // LOG_D("POLL %p %p", tpcb, arg);
+  // tcp_output(tpcb);
+
+  return ERR_OK;
 }
 
 /** Function prototype for tcp error callback functions. Called when the pcb
@@ -945,11 +964,10 @@ static err_t tcp_sent_callback(void *arg, struct tcp_pcb *tpcb, u16_t len)
  *            ERR_ABRT: aborted through tcp_abort or by a TCP timer
  *            ERR_RST: the connection was reset by the remote host
  */
-static void tcp_err_callback(void *arg, err_t err)
-{
+static void tcp_err_callback(void *arg, err_t err) {
   struct tcp_struct *tcp_arg = (struct tcp_struct *)arg;
 
-  LWIP_DEBUGF(NETIF_DEBUG, ("TCP err %d\n", err));
+  LOG_E("TCP err %d", err);
   if (tcp_arg != NULL) {
     if (ERR_OK != err) {
       tcp_arg->pcb = NULL;
@@ -964,24 +982,23 @@ static void tcp_err_callback(void *arg, err_t err)
   * @param es: pointer on echoclient structure
   * @retval None
   */
-void tcp_connection_close(struct tcp_pcb *tpcb, struct tcp_struct *tcp)
-{
-  LWIP_DEBUGF(NETIF_DEBUG, ("CLOSE %p %p\n", tpcb, tcp));
+void tcp_connection_close(struct tcp_pcb *tpcb, struct tcp_struct *tcp) {
+  if (tcp->state == TCP_CLOSING) {
+    return;
+  }
+
+  LOCK_TCPIP_CORE();
   /* remove callbacks */
   tcp_accept(tpcb, NULL);
-  while (tcp_sndqueuelen(tpcb)) {
-    LWIP_DEBUGF(NETIF_DEBUG, ("Waitinf TX done %d (%d)\n", tcp_sndqueuelen(tpcb), tcp_sndbuf(tpcb)));
-    // tcp_output(tpcb);
-    sys_msleep(20);
-  }
   tcp_recv(tpcb, NULL);
   tcp_sent(tpcb, NULL);
   tcp_poll(tpcb, NULL, 0);
   tcp_err(tpcb, NULL);
-
   /* close tcp connection */
-  tcp_close(tpcb);
-  LWIP_DEBUGF(NETIF_DEBUG, ("CLOSE done\n"));
+  if (ERR_OK != tcp_close(tpcb)) {
+    tcp_abort(tpcb);
+  }
+  UNLOCK_TCPIP_CORE();
 
   tcp->pcb = NULL;
   tcp->state = TCP_CLOSING;

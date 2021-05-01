@@ -6,6 +6,11 @@ extern "C" {
 #include "EthernetClient.h"
 #include "EthernetServer.h"
 
+#include "lwip/tcpip.h"
+
+#define LOG_TAG "ETH_SRV"
+#include <log.h>
+
 EthernetServer::EthernetServer(uint16_t port)
 {
   _port = port;
@@ -19,16 +24,18 @@ void EthernetServer::begin()
     return;
   }
 
+  LOCK_TCPIP_CORE();
   _tcp_server.pcb = tcp_new();
-
+  UNLOCK_TCPIP_CORE();
   if (_tcp_server.pcb == NULL) {
     return;
   }
 
-  tcp_arg(_tcp_server.pcb, &_tcp_client);
   _tcp_server.state = TCP_NONE;
-
+  LOCK_TCPIP_CORE();
+  tcp_arg(_tcp_server.pcb, &_tcp_client);
   if (ERR_OK != tcp_bind(_tcp_server.pcb, IP_ADDR_ANY, _port)) {
+    UNLOCK_TCPIP_CORE();
     memp_free(MEMP_TCP_PCB, _tcp_server.pcb);
     _tcp_server.pcb = NULL;
     return;
@@ -36,6 +43,7 @@ void EthernetServer::begin()
 
   _tcp_server.pcb = tcp_listen(_tcp_server.pcb);
   tcp_accept(_tcp_server.pcb, tcp_accept_callback);
+  UNLOCK_TCPIP_CORE();
 }
 
 void EthernetServer::accept()
@@ -45,6 +53,7 @@ void EthernetServer::accept()
     if (_tcp_client[n] != NULL) {
       EthernetClient client(_tcp_client[n]);
       if (client.status() == TCP_CLOSING) {
+        LOG_D("--- free tcp #%d %p", n, _tcp_client[n]);
         mem_free(_tcp_client[n]);
         _tcp_client[n] = NULL;
       }
