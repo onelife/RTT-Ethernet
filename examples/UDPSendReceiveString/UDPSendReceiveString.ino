@@ -8,20 +8,30 @@
 
  created 21 Aug 2010
  by Michael Margolis
+ modified 23 Jun 2017
+ by Wi6Labs
+ modified 1 Jun 2018
+ by sstaub
+ modified 16 Apr 2021
+ by onelife
 
  This code is in the public domain.
  */
 
+#include <rtt.h>
+#include <LwIP.h>
+#include <RttEthernet.h>
+#include <EthernetUdp.h>         // UDP library from: bjoern@cs.stanford.edu 12/30/2008
 
-#include <Ethernet.h>
-#include <EthernetUdp.h>
+#define LOG_TAG "UDP_TRX"
+#include <log.h>
 
 // Enter a MAC address and IP address for your controller below.
 // The IP address will be dependent on your local network:
-byte mac[] = {
-  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED
-};
-IPAddress ip(192, 168, 1, 177);
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+IPAddress ip(192, 168, 10, 85);
+IPAddress subnet(255, 255, 255, 0);
+IPAddress gateway(192, 168, 10, 254);
 
 unsigned int localPort = 8888;      // local port to listen on
 
@@ -32,67 +42,57 @@ char ReplyBuffer[] = "acknowledged";        // a string to send back
 // An EthernetUDP instance to let us send and receive packets over UDP
 EthernetUDP Udp;
 
+int app_done = 0;
+
 void setup() {
-  // You can use Ethernet.init(pin) to configure the CS pin
-  //Ethernet.init(10);  // Most Arduino shields
-  //Ethernet.init(5);   // MKR ETH shield
-  //Ethernet.init(0);   // Teensy 2.0
-  //Ethernet.init(20);  // Teensy++ 2.0
-  //Ethernet.init(15);  // ESP8266 with Adafruit Featherwing Ethernet
-  //Ethernet.init(33);  // ESP32 with Adafruit Featherwing Ethernet
+  RT_T.begin();
+}
+
+void setup_after_rtt_start() {
+  static int init_done = 0;
+  if (init_done) {
+    return;
+  }
 
   // start the Ethernet
-  Ethernet.begin(mac, ip);
-
-  // Open serial communications and wait for port to open:
-  Serial.begin(9600);
-  while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB port only
-  }
-
-  // Check for Ethernet hardware present
-  if (Ethernet.hardwareStatus() == EthernetNoHardware) {
-    Serial.println("Ethernet shield was not found.  Sorry, can't run without hardware. :(");
-    while (true) {
-      delay(1); // do nothing, no point running without Ethernet hardware
-    }
-  }
+  Ethernet.begin(mac, ip, subnet, gateway);
   if (Ethernet.linkStatus() == LinkOFF) {
-    Serial.println("Ethernet cable is not connected.");
+    LOG_I("Ethernet cable is not connected.");
+    app_done = 1;
+    return;
   }
 
   // start UDP
   Udp.begin(localPort);
+
+  init_done = 1;
 }
 
 void loop() {
+  setup_after_rtt_start();
+  if (app_done) {
+    return;
+  }
+
   // if there's data available, read a packet
   int packetSize = Udp.parsePacket();
   if (packetSize) {
-    Serial.print("Received packet of size ");
-    Serial.println(packetSize);
-    Serial.print("From ");
+    LOG_I("Received packet of size %d", packetSize);
     IPAddress remote = Udp.remoteIP();
-    for (int i=0; i < 4; i++) {
-      Serial.print(remote[i], DEC);
-      if (i < 3) {
-        Serial.print(".");
-      }
-    }
-    Serial.print(", port ");
-    Serial.println(Udp.remotePort());
+    LOG_I("From  %u.%u.%u.%u, port %u",
+      remote[0], remote[1], remote[2], remote[3], Udp.remotePort());
 
     // read the packet into packetBufffer
     Udp.read(packetBuffer, UDP_TX_PACKET_MAX_SIZE);
-    Serial.println("Contents:");
-    Serial.println(packetBuffer);
+    packetBuffer[packetSize] = 0;
+    LOG_I("Contents:\n%s", packetBuffer);
 
     // send a reply to the IP address and port that sent us the packet we received
     Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
     Udp.write(ReplyBuffer);
     Udp.endPacket();
   }
-  delay(10);
+  rt_thread_mdelay(10);
 }
 
 
@@ -135,5 +135,4 @@ void loop() {
  println();
  }
  */
-
 

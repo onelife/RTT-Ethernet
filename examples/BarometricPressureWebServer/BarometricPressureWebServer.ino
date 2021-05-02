@@ -21,20 +21,31 @@
 
  created 31 July 2010
  by Tom Igoe
+ modified 23 Jun 2017
+ by Wi6Labs
+ modified 1 Jun 2018
+ by sstaub
+ modified 16 Apr 2021
+ by onelife
+
  */
 
-#include <Ethernet.h>
+#include <rtt.h>
+#include <LwIP.h>
+#include <RttEthernet.h>
 // the sensor communicates using SPI, so include the library:
 #include <SPI.h>
 
+#define LOG_TAG "BAR_WEB"
+#include <log.h>
 
 // assign a MAC address for the Ethernet controller.
 // fill in your address here:
-byte mac[] = {
-  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED
-};
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 // assign an IP address for the controller:
-IPAddress ip(192, 168, 1, 20);
+IPAddress ip(192, 168, 10, 85);
+IPAddress gateway(192, 168, 10, 254);
+IPAddress subnet(255, 255, 255, 0);
 
 
 // Initialize the Ethernet server library
@@ -58,41 +69,29 @@ long pressure = 0;
 long lastReadingTime = 0;
 
 void setup() {
-  // You can use Ethernet.init(pin) to configure the CS pin
-  //Ethernet.init(10);  // Most Arduino shields
-  //Ethernet.init(5);   // MKR ETH shield
-  //Ethernet.init(0);   // Teensy 2.0
-  //Ethernet.init(20);  // Teensy++ 2.0
-  //Ethernet.init(15);  // ESP8266 with Adafruit Featherwing Ethernet
-  //Ethernet.init(33);  // ESP32 with Adafruit Featherwing Ethernet
+  RT_T.begin();
+}
+
+void setup_after_rtt_start() {
+  static int init_done = 0;
+  if (init_done) {
+    return;
+  }
 
   // start the SPI library:
   SPI.begin();
 
   // start the Ethernet connection
-  Ethernet.begin(mac, ip);
+  Ethernet.begin(mac, ip, subnet, gateway);
 
-  // Open serial communications and wait for port to open:
-  Serial.begin(9600);
-  while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB port only
-  }
-
-  // Check for Ethernet hardware present
-  if (Ethernet.hardwareStatus() == EthernetNoHardware) {
-    Serial.println("Ethernet shield was not found.  Sorry, can't run without hardware. :(");
-    while (true) {
-      delay(1); // do nothing, no point running without Ethernet hardware
-    }
-  }
   if (Ethernet.linkStatus() == LinkOFF) {
-    Serial.println("Ethernet cable is not connected.");
+    LOG_I("Ethernet cable is not connected.");
   }
 
   // start listening for clients
   server.begin();
 
-  // initalize the data ready and chip select pins:
+  // initialize the  data ready and chip select pins:
   pinMode(dataReadyPin, INPUT);
   pinMode(chipSelectPin, OUTPUT);
 
@@ -102,14 +101,17 @@ void setup() {
   writeRegister(0x03, 0x02);
 
   // give the sensor and Ethernet shield time to set up:
-  delay(1000);
+  rt_thread_mdelay(1000);
 
   //Set the sensor to high resolution mode tp start readings:
   writeRegister(0x03, 0x0A);
 
+  init_done = 1;
 }
 
 void loop() {
+  setup_after_rtt_start();
+
   // check for a reading no more than once a second.
   if (millis() - lastReadingTime > 1000) {
     // if there's a reading ready, read it:
@@ -127,12 +129,18 @@ void loop() {
 
 
 void getData() {
-  Serial.println("Getting reading");
+  LOG_I("Getting reading");
   //Read the temperature data
   int tempData = readRegister(0x21, 2);
 
   // convert the temperature to celsius and display it:
   temperature = (float)tempData / 20.0;
+  // Sorry, no printing floating number support
+  int temperature_ = int(temperature * 1000);
+  if (temperature_ % 10 >= 5) {
+    temperature_ += 10;
+  }
+  temperature_ /= 10;
 
   //Read the pressure data highest 3 bits:
   byte  pressureDataHigh = readRegister(0x1F, 1);
@@ -143,20 +151,17 @@ void getData() {
   //combine the two parts into one 19-bit number:
   pressure = ((pressureDataHigh << 16) | pressureDataLow) / 4;
 
-  Serial.print("Temperature: ");
-  Serial.print(temperature);
-  Serial.println(" degrees C");
-  Serial.print("Pressure: " + String(pressure));
-  Serial.println(" Pa");
+  LOG_I("Temperature: %d.%02d degrees C", int(temperature), temperature_);
+  LOG_I("Pressure: %d Pa", pressure);
 }
 
 void listenForEthernetClients() {
   // listen for incoming clients
   EthernetClient client = server.available();
   if (client) {
-    Serial.println("Got a client");
+    LOG_I("Got a client");
     // an http request ends with a blank line
-    boolean currentLineIsBlank = true;
+    bool currentLineIsBlank = true;
     while (client.connected()) {
       if (client.available()) {
         char c = client.read();
@@ -188,7 +193,7 @@ void listenForEthernetClients() {
       }
     }
     // give the web browser time to receive the data
-    delay(1);
+    rt_thread_mdelay(100);
     // close the connection:
     client.stop();
   }

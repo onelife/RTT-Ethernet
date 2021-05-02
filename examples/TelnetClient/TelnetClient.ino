@@ -10,25 +10,44 @@
  http://processing.org/
 
  Circuit:
- * Ethernet shield attached to pins 10, 11, 12, 13
+ * STM32 board with Ethernet support
 
  created 14 Sep 2010
  modified 9 Apr 2012
  by Tom Igoe
+ modified 23 Jun 2017
+ by Wi6Labs
+ modified 1 Jun 2018
+ by sstaub
+ modified 16 Apr 2021
+ by onelife
+
  */
 
-#include <SPI.h>
-#include <Ethernet.h>
+#define ADD_MSH_CMD(name, desc, fn, r_type, ...)
+#include <user_cmd.h>
+
+#include <rtt.h>
+#include <LwIP.h>
+#include <RttEthernet.h>
+
+#define LOG_TAG "TEL_CL"
+#include <log.h>
+
+struct user_input {
+    int available;
+    char buffer[161];
+};
 
 // Enter a MAC address and IP address for your controller below.
 // The IP address will be dependent on your local network:
-byte mac[] = {
-  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED
-};
-IPAddress ip(192, 168, 1, 177);
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+IPAddress ip(192, 168, 10, 85);
+IPAddress subnet(255, 255, 255, 0);
+IPAddress gateway(192, 168, 10, 254);
 
 // Enter the IP address of the server you're connecting to:
-IPAddress server(1, 1, 1, 1);
+IPAddress server(192, 168, 10, 16);
 
 // Initialize the Ethernet client library
 // with the IP address and port of the server
@@ -36,78 +55,95 @@ IPAddress server(1, 1, 1, 1);
 // if you're using Processing's ChatServer, use port 10002):
 EthernetClient client;
 
+struct user_input user;
+
 void setup() {
-  // You can use Ethernet.init(pin) to configure the CS pin
-  //Ethernet.init(10);  // Most Arduino shields
-  //Ethernet.init(5);   // MKR ETH shield
-  //Ethernet.init(0);   // Teensy 2.0
-  //Ethernet.init(20);  // Teensy++ 2.0
-  //Ethernet.init(15);  // ESP8266 with Adafruit Featherwing Ethernet
-  //Ethernet.init(33);  // ESP32 with Adafruit Featherwing Ethernet
+  RT_T.begin();
+}
+
+void setup_after_rtt_start() {
+  static int init_done = 0;
+  if (init_done) {
+    return;
+  }
 
   // start the Ethernet connection:
-  Ethernet.begin(mac, ip);
+  Ethernet.begin(mac, ip, subnet, gateway);
 
-  // Open serial communications and wait for port to open:
-  Serial.begin(9600);
-  while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB port only
-  }
-
-  // Check for Ethernet hardware present
-  if (Ethernet.hardwareStatus() == EthernetNoHardware) {
-    Serial.println("Ethernet shield was not found.  Sorry, can't run without hardware. :(");
-    while (true) {
-      delay(1); // do nothing, no point running without Ethernet hardware
-    }
-  }
   while (Ethernet.linkStatus() == LinkOFF) {
-    Serial.println("Ethernet cable is not connected.");
-    delay(500);
+    LOG_I("Ethernet cable is not connected.");
+    rt_thread_mdelay(500);
   }
 
-  // give the Ethernet shield a second to initialize:
-  delay(1000);
-  Serial.println("connecting...");
+  LOG_I("connecting...");
 
   // if you get a connection, report back via serial:
   if (client.connect(server, 10002)) {
-    Serial.println("connected");
+    LOG_I("connected");
   } else {
     // if you didn't get a connection to the server:
-    Serial.println("connection failed");
+    LOG_I("connection failed");
   }
+
+  user.available = 0;
+  init_done = 1;
 }
 
 void loop() {
-  // if there are incoming bytes available
-  // from the server, read them and print them:
-  if (client.available()) {
-    char c = client.read();
-    Serial.print(c);
+  static int app_done = 0;
+  if (app_done) {
+    return;
   }
 
-  // as long as there are bytes in the serial queue,
-  // read them and send them out the socket if it's open:
-  while (Serial.available() > 0) {
-    char inChar = Serial.read();
-    if (client.connected()) {
-      client.print(inChar);
+  setup_after_rtt_start();
+
+  // if there are incoming bytes available
+  // from the server, read them and print them:
+  int len = client.available();
+  if (len > 0) {
+    byte buffer[161];
+    if (len > 160) {
+      len = 160;
     }
+    len = client.read(buffer, len);
+    buffer[len] = 0;
+    LOG_RAW("%s\n", buffer); // show in the serial monitor (slows some boards)
+  }
+
+  // when there is user input, send the content out the socket:
+  if ((user.available > 0) && (client.connected())) {
+    client.write(user.buffer, user.available);
+    user.available = 0;
   }
 
   // if the server's disconnected, stop the client:
   if (!client.connected()) {
-    Serial.println();
-    Serial.println("disconnecting.");
+    LOG_I("\ndisconnecting.");
     client.stop();
     // do nothing:
-    while (true) {
-      delay(1);
-    }
+    app_done = 1;
   }
 }
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
+int telnet_send(int argc, char **argv) {
+  if (argc != 2) {
+    rt_kprintf("Usage: telnet \"message to send\"\n");
+  } else {
+    user.available = rt_strlen(argv[1]);
+    if (user.available > 160) {
+      user.available = 160;
+    }
+    rt_memcpy(user.buffer, argv[1], user.available);
+    user.buffer[user.available] = 0;
+  }
 
+  return 0;
+}
 
+#ifdef __cplusplus
+}
+#endif

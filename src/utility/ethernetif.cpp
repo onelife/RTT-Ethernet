@@ -126,7 +126,7 @@ static void lwip_custom_pbuf_free(struct pbuf *p) {
   if (!ret) {
     LOG_E("RX Q full");
   } else {
-    LOG_D("RX Q+ %p", custom_p->buf);
+    LOG_D("RX Q+ %p %d", custom_p->buf, rx_buf_queue.put_cnt - rx_buf_queue.get_cnt);
   }
   LWIP_MEMPOOL_FREE(RX_POOL, custom_p);
 }
@@ -516,14 +516,14 @@ static struct pbuf *low_level_input(struct netif *netif)
 
     /* Allocate new buf */
     if (is_empty(&rx_buf_queue)) {
-      LOG_E("RX Q empty");
+      LOG_E("RX Q empty, %d %d", rx_buf_queue.put_cnt, rx_buf_queue.get_cnt);
       LWIP_MEMPOOL_FREE(RX_POOL, custom_p);
       p = NULL;
       break;
     }
     new_buf = queue_get(&rx_buf_queue);
     // LOG_D("RX %p (%d), %d", EthHandle.RxFrameInfos.FSRxDesc->Buffer1Addr, len, (rx_buf_queue.put_cnt - rx_buf_queue.get_cnt));
-    LOG_D("RX Q- %p", new_buf);
+    LOG_D("RX Q- %p %d", new_buf, rx_buf_queue.put_cnt - rx_buf_queue.get_cnt);
     EthHandle.RxFrameInfos.FSRxDesc->Buffer1Addr = (uint32_t)new_buf;
   } while (0);
 
