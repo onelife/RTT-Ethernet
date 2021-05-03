@@ -57,3 +57,23 @@ It is compatible with [Arduino Ethernet library](https://www.arduino.cc/en/Refer
 * Ethernet.begin(mac, ip, dns);
 * Ethernet.begin(mac, ip, dns, gateway);
 * Ethernet.begin(mac, ip, dns, gateway, subnet);
+
+
+## Examples
+
+* Ported from Arduino Ethernet library
+  - WebClient
+  - WebClientRepeating
+  - WebServer
+  - ChatServer
+  - DhcpChatServer
+  - AdvancedChatServer
+  - DhcpAddressPrinter
+  - TelnetClient
+  - BarometricPressureWebServer
+  - UDPSendReceiveString
+  - UdpNtpClient
+
+* LwIP App
+  - LwipIperf: iPerf TCP server and client
+  - LwipHttp: Web server and client

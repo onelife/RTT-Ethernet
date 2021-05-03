@@ -483,23 +483,6 @@ void User_notification(struct netif *netif)
 
 #if LWIP_DNS
 
-/**
-  * @brief  Initializes DNS
-  * @param  dnsaddr: DNS address
-  * @retval None
-  */
-void stm32_dns_init(const uint8_t *dnsaddr)
-{
-  ip_addr_t ip;
-
-  /* DNS initialized by DHCP when call dhcp_start() */
-  if (!stm32_dhcp_started()) {
-    dns_init();
-    IP_ADDR4(&ip, dnsaddr[0], dnsaddr[1], dnsaddr[2], dnsaddr[3]);
-    dns_setserver(0, &ip);
-  }
-}
-
 /** Callback which is invoked when a hostname is found.
  * A function of this type must be implemented by the application using the DNS resolver.
  * @param name pointer to the name that was looked up.
@@ -550,7 +533,7 @@ int8_t stm32_dns_gethostbyname(const char *hostname, uint32_t *ipaddr)
           ret = -1;
           break;
         }
-        sys_msleep(20);
+        sys_msleep(500);
       }
 
       if (ret == 0) {
@@ -567,6 +550,7 @@ int8_t stm32_dns_gethostbyname(const char *hostname, uint32_t *ipaddr)
       break;
 
     default:
+      LOG_E("dns_gethostbyname err, %d", err);
       ret = -4;
       break;
   }

@@ -1,6 +1,7 @@
 #include "RttEthernet.h"
 
 #include "lwip/sys.h"
+#include "lwip/dns.h"
 
 // Possible return codes from ProcessResponse
 #define SUCCESS          1
@@ -49,10 +50,13 @@ void EthernetClass::begin(IPAddress local_ip, IPAddress subnet, IPAddress gatewa
 
 void EthernetClass::begin(IPAddress local_ip, IPAddress subnet, IPAddress gateway, IPAddress dns_server)
 {
+  ip_addr_t ip;
   stm32_eth_init(MACAddressDefault(), local_ip.raw_address(), gateway.raw_address(), subnet.raw_address());
   /* If there is a local DHCP informs it of our manual IP configuration to
   prevent IP conflict */
   stm32_DHCP_manual_config();
+  IP_ADDR4(&ip, dns_server[0], dns_server[1], dns_server[2], dns_server[3]);
+  dns_setserver(0, &ip);
   _dnsServerAddress = dns_server;
 }
 
@@ -95,10 +99,13 @@ void EthernetClass::begin(uint8_t *mac_address, IPAddress local_ip, IPAddress dn
 
 void EthernetClass::begin(uint8_t *mac, IPAddress local_ip, IPAddress dns_server, IPAddress gateway, IPAddress subnet)
 {
+  ip_addr_t ip;
   stm32_eth_init(mac, local_ip.raw_address(), gateway.raw_address(), subnet.raw_address());
   /* If there is a local DHCP informs it of our manual IP configuration to
   prevent IP conflict */
   stm32_DHCP_manual_config();
+  IP_ADDR4(&ip, dns_server[0], dns_server[1], dns_server[2], dns_server[3]);
+  dns_setserver(0, &ip);
   _dnsServerAddress = dns_server;
   MACAddress(mac);
 }

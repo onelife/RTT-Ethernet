@@ -37,9 +37,9 @@
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 // Set the static IP address to use if the DHCP fails to assign
 IPAddress ip(192, 168, 10, 85);
-IPAddress subnet(255, 255, 255, 0);
-IPAddress gateway(192, 168, 10, 254);
 IPAddress myDns(192, 168, 10, 254);
+IPAddress gateway(192, 168, 10, 254);
+IPAddress subnet(255, 255, 255, 0);
 
 // initialize the library instance:
 EthernetClient client;
@@ -68,7 +68,7 @@ void setup_after_rtt_start() {
       LOG_I("Ethernet cable is not connected.");
     }
     // try to congifure using IP address instead of DHCP:
-    Ethernet.begin(mac, ip, subnet, gateway, myDns);
+    Ethernet.begin(mac, ip, myDns, gateway, subnet);
     IPAddress addr = Ethernet.localIP();
     LOG_I("My IP address: %u.%u.%u.%u", addr[0], addr[1], addr[2], addr[3]);
   } else {

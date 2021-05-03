@@ -7,7 +7,7 @@
 #define __LWIPOPTS_DEFAULT_H__
 
 /* ---------- Debug options ---------- */
-#define LWIP_DEBUG 
+#define LWIP_DEBUG
 // #define TCP_QLEN_DEBUG               	LWIP_DBG_ON
 // #define NETIF_DEBUG                     LWIP_DBG_ON
 // #define HTTPD_DEBUG                     LWIP_DBG_ON

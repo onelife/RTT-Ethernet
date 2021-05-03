@@ -37,9 +37,9 @@ char server[] = "www.github.com";    // name address for GitHub (using DNS)
 
 // Set the static IP address to use if the DHCP fails to assign
 IPAddress ip(192, 168, 10, 85);
-IPAddress subnet(255, 255, 255, 0);
-IPAddress gateway(192, 168, 10, 254);
 IPAddress myDns(192, 168, 10, 254);
+IPAddress gateway(192, 168, 10, 254);
+IPAddress subnet(255, 255, 255, 0);
 
 // Initialize the Ethernet client library
 // with the IP address and port of the server
@@ -68,8 +68,8 @@ void setup_after_rtt_start() {
     if (Ethernet.linkStatus() == LinkOFF) {
       LOG_I("Ethernet cable is not connected.");
     }
-    // try to congifure using IP address instead of DHCP:
-    Ethernet.begin(mac, ip, subnet, gateway, myDns);
+    // try to configure using IP address instead of DHCP:
+    Ethernet.begin(mac, ip, myDns, gateway, subnet);
   } else {
     IPAddress addr = Ethernet.localIP();
     LOG_I("  DHCP assigned IP %u.%u.%u.%u", addr[0], addr[1], addr[2], addr[3]);

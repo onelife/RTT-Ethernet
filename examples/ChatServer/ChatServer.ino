@@ -53,7 +53,7 @@ void setup_after_rtt_start() {
   }
 
   // initialize the ethernet device
-  Ethernet.begin(mac, ip, subnet, gateway, myDns);
+  Ethernet.begin(mac, ip, myDns, gateway, subnet);
 
   if (Ethernet.linkStatus() == LinkOFF) {
     LOG_I("Ethernet cable is not connected.");

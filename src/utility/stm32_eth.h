@@ -141,7 +141,6 @@ void User_notification(struct netif *netif);
 #endif
 
 #if LWIP_DNS
-  void stm32_dns_init(const uint8_t *dnsaddr);
   int8_t stm32_dns_gethostbyname(const char *hostname, uint32_t *ipaddr);
 #else
   #error "LWIP_DNS must be enabled in lwipopts.h"

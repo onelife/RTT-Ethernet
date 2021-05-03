@@ -44,9 +44,9 @@
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 // assign an IP address for the controller:
 IPAddress ip(192, 168, 10, 85);
+IPAddress myDns(192, 168, 10, 254);
 IPAddress gateway(192, 168, 10, 254);
 IPAddress subnet(255, 255, 255, 0);
-
 
 // Initialize the Ethernet server library
 // with the IP address and port you want to use
@@ -82,7 +82,7 @@ void setup_after_rtt_start() {
   SPI.begin();
 
   // start the Ethernet connection
-  Ethernet.begin(mac, ip, subnet, gateway);
+  Ethernet.begin(mac, ip, myDns, gateway, subnet);
 
   if (Ethernet.linkStatus() == LinkOFF) {
     LOG_I("Ethernet cable is not connected.");

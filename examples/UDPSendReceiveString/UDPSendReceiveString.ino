@@ -30,8 +30,9 @@
 // The IP address will be dependent on your local network:
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
 IPAddress ip(192, 168, 10, 85);
-IPAddress subnet(255, 255, 255, 0);
+IPAddress myDns(192, 168, 10, 254);
 IPAddress gateway(192, 168, 10, 254);
+IPAddress subnet(255, 255, 255, 0);
 
 unsigned int localPort = 8888;      // local port to listen on
 
@@ -55,7 +56,7 @@ void setup_after_rtt_start() {
   }
 
   // start the Ethernet
-  Ethernet.begin(mac, ip, subnet, gateway);
+  Ethernet.begin(mac, ip, myDns, gateway, subnet);
   if (Ethernet.linkStatus() == LinkOFF) {
     LOG_I("Ethernet cable is not connected.");
     app_done = 1;
