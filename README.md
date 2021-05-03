@@ -36,9 +36,9 @@ It is compatible with [Arduino Ethernet library](https://www.arduino.cc/en/Refer
   - RX buffers defined in `utility/ethernetif.cpp`
     - Rx_Buff == ETH_RXBUFNB * 2
   - TX buffers defined in `lwippools.h`
-    - 372-byte * 16
-    - 736-byte * 16
-    - 1540-byte * 4
+    - 372-byte * 8
+    - 736-byte * 8
+    - 1540-byte * 8
 
 * Notes
   - It is recommended to set ETH_RXBUFNB to 8 when running examples.
