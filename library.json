@@ -1,6 +1,6 @@
 {
   "name": "RTT-Ethernet",
-  "version": "2.0.0",
+  "version": "2.1.1",
   "description": "Arduino library to support Ethernet for STM32 based board.",
   "keywords": ["Ethernet", "RTOS", "RT-Thread", "rtt"],
   "repository": {
@@ -14,7 +14,7 @@
     {
         "owner": "onelife",
         "name": "RT-Thread",
-        "version": ">=0.9.0"
+        "version": ">=0.9.1"
     },
     {
         "owner": "onelife",

@@ -131,10 +131,6 @@ static void lwip_custom_pbuf_free(struct pbuf *p) {
   LWIP_MEMPOOL_FREE(RX_POOL, custom_p);
 }
 
-void hello2(void) {
-  rt_kprintf("hello\n");
-}
-
 /*******************************************************************************
                        Ethernet MSP Routines
 *******************************************************************************/

@@ -8,7 +8,7 @@
 
 /* ---------- Debug options ---------- */
 #define LWIP_DEBUG
-// #define TCP_QLEN_DEBUG               	LWIP_DBG_ON
+// #define SOCKETS_DEBUG                   LWIP_DBG_ON
 // #define NETIF_DEBUG                     LWIP_DBG_ON
 // #define HTTPD_DEBUG                     LWIP_DBG_ON
 // #define TCPIP_DEBUG                     LWIP_DBG_ON
@@ -20,6 +20,10 @@
 // #define ALTCP_WOLFSSL_MEM_DEBUG         LWIP_DBG_ON
 #define LOG_LVL LOG_LVL_INFO
 
+#define LWIP_PLATFORM_ASSERT(x) \
+  do {LOG_E("Assertion \"%s\" failed at line %d in %s\n", \
+    x, __LINE__, __FILE__); } while(0)
+
 #define LWIP_MARK_TCPIP_THREAD() { \
   extern uint32_t tcpip_started; \
   tcpip_started = 1; \
@@ -28,13 +32,13 @@
 #define LWIP_ASSERT_CORE_LOCKED() { \
   extern void *lock_tcpip_core; \
   extern uint32_t tcpip_started; \
-  extern void hello2(void); \
   if (tcpip_started && !*((uint8_t *)lock_tcpip_core + 39)) { \
     rt_kprintf("!!! CORE_LOCK: %x\n", *((uint8_t *)lock_tcpip_core + 39)); \
-    hello2(); \
+    LWIP_ASSERT("TCPIP core lock is not held", (tcpip_started && *((uint8_t *)lock_tcpip_core + 39))); \
   } \
 }
-  // LWIP_ASSERT("TCPIP core lock is not held", (tcpip_started && *((uint8_t *)lock_tcpip_core + 39)));
+
+#define portNOP()                         asm volatile ( "nop" )
 
 #ifdef __cplusplus
 extern "C" {

@@ -46,34 +46,51 @@ It is compatible with [Arduino Ethernet library](https://www.arduino.cc/en/Refer
 
 ## Initialization
 
-* Ethernet.begin();
-* Ethernet.begin(ip);
-* Ethernet.begin(ip, subnet);
-* Ethernet.begin(ip, subnet, gateway);
-* Ethernet.begin(ip, subnet, gateway, dns);
+* `Ethernet.begin()`
+* `Ethernet.begin(ip)`
+* `Ethernet.begin(ip, subnet)`
+* `Ethernet.begin(ip, subnet, gateway)`
+* `Ethernet.begin(ip, subnet, gateway, dns)`
 
-* Ethernet.begin(mac);
-* Ethernet.begin(mac, ip);
-* Ethernet.begin(mac, ip, dns);
-* Ethernet.begin(mac, ip, dns, gateway);
-* Ethernet.begin(mac, ip, dns, gateway, subnet);
+* `Ethernet.begin(mac)`
+* `Ethernet.begin(mac, ip)`
+* `Ethernet.begin(mac, ip, dns)`
+* `Ethernet.begin(mac, ip, dns, gateway)`
+* `Ethernet.begin(mac, ip, dns, gateway, subnet)`
 
 
 ## Examples
 
+For all examples, please select the suitable initialization method and parameters accordingly.
+
 * Ported from Arduino Ethernet library
   - WebClient
+    Connect to specified host (www.github.com) once.
   - WebClientRepeating
+    Connect to specified host (www.arduino.cc) repeatedly.
   - WebServer
+    Serve a HTTP page with port 80.
   - ChatServer
+    Echo TCP message with fixed IP address (`192.168.10.85` by default) and telnet port (23)
   - DhcpChatServer
+    Echo TCP message with telnet port (23)
   - AdvancedChatServer
+    Echo TCP message with telnet port (23) by using `Server.accept()` method.
   - DhcpAddressPrinter
+    Print DHCP assigned IP address.
   - TelnetClient
+    A simple telnet server with MSH command `telnet` to send message to client.
   - BarometricPressureWebServer
+    Serves the output of a Barometric Pressure Sensor as a web page.
   - UDPSendReceiveString
+    A example to send and receive UDP messages.
   - UdpNtpClient
+    A simple NTP client.
 
 * LwIP App
-  - LwipIperf: iPerf TCP server and client
-  - LwipHttp: Web server and client
+  - LwipIperf
+    RAW API example of iPerf TCP server and client
+  - LwipHttp
+    RAW API example web server and client
+  - LwipSocket
+    Socket API example of `nonblocking`, `receive` and `select()` functions.
