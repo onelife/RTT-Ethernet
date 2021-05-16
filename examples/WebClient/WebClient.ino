@@ -126,12 +126,12 @@ void loop() {
     float seconds = (float)(endMicros - beginMicros) / 1000000.0;
     float rate = (float)byteCount / seconds / 1000.0;
     // Sorry, no floating number printing support
-    int seconds_ = int(seconds * 100000);
+    int seconds_ = int((seconds - (int)seconds) * 100000);
     if (seconds_ % 10 >= 5) {
       seconds_ += 10;
     }
     seconds_ /= 10;
-    int rate_ = int(rate * 1000);
+    int rate_ = int((rate - (int)rate) * 1000);
     if (rate_ % 10 >= 5) {
       rate_ += 10;
     }

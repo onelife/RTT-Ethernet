@@ -150,5 +150,4 @@ extern void rt_kprintf(const char *fmt, ...);
 #define ETHERNET_RMII_MODE_CONFIGURATION  1
 #define ETH_INPUT_USE_IT                  1
 
-
 #endif /* __LWIPOPTS_DEFAULT_H__ */

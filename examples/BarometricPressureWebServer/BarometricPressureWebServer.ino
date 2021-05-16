@@ -136,7 +136,7 @@ void getData() {
   // convert the temperature to celsius and display it:
   temperature = (float)tempData / 20.0;
   // Sorry, no printing floating number support
-  int temperature_ = int(temperature * 1000);
+  int temperature_ = int((temperature - (int)temperature) * 1000);
   if (temperature_ % 10 >= 5) {
     temperature_ += 10;
   }
