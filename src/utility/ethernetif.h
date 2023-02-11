@@ -50,7 +50,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include "lwip/err.h"
+#include "lwip/errno.h"
 #include "lwip/netif.h"
 /* Exported types ------------------------------------------------------------*/
 uint8_t ethernetif_is_init(void);

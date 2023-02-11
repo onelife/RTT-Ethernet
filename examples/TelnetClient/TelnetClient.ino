@@ -24,7 +24,7 @@
 
  */
 
-#define ADD_MSH_CMD(name, desc, fn, r_type, ...)
+#define ADD_MSH_CMD(name)
 #include <user_cmd.h>
 
 #include <rtt.h>
@@ -144,6 +144,7 @@ int telnet_send(int argc, char **argv) {
 
   return 0;
 }
+MSH_CMD_EXPORT_ALIAS(telnet_send, telnet, Send message to Telnet server.)
 
 #ifdef __cplusplus
 }

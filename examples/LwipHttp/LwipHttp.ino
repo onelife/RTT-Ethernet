@@ -72,6 +72,7 @@ err_t rx_header(httpc_state_t *stats, void *arg, struct pbuf *hdr,
 
 err_t rx_body(void *arg, struct altcp_pcb *conn, struct pbuf *p, err_t err) {
   (void)arg;
+  (void)err;
   altcp_recved(conn, p->tot_len);
   rx_len += p->tot_len;
   pbuf_free(p);

@@ -65,32 +65,39 @@ For all examples, please select the suitable initialization method and parameter
 
 * Ported from Arduino Ethernet library
   - WebClient
-    Connect to specified host (www.github.com) once.
+    - Connect to specified host (www.github.com) once.
   - WebClientRepeating
-    Connect to specified host (www.arduino.cc) repeatedly.
+    - Connect to specified host (www.arduino.cc) repeatedly.
   - WebServer
-    Serve a HTTP page with port 80.
+    - Serve a HTTP page with port 80.
   - ChatServer
-    Echo TCP message with fixed IP address (`192.168.10.85` by default) and telnet port (23)
+    - Echo TCP message with fixed IP address (`192.168.10.85` by default) and telnet port (23)
   - DhcpChatServer
-    Echo TCP message with telnet port (23)
+    - Echo TCP message with telnet port (23)
   - AdvancedChatServer
-    Echo TCP message with telnet port (23) by using `Server.accept()` method.
+    - Echo TCP message with telnet port (23) by using `Server.accept()` method.
+    - Accept up to 8 clients, and forward messages from one client to the rests.
   - DhcpAddressPrinter
-    Print DHCP assigned IP address.
+    - Print DHCP assigned IP address.
   - TelnetClient
-    A simple telnet server with MSH command `telnet` to send message to client.
+    - A simple telnet client with MSH command `telnet` to send message to server.
+    - A Python script of telnet echo server, "telnet_server.py".
+    - Run the Python script before starting the example.
   - BarometricPressureWebServer
-    Serves the output of a Barometric Pressure Sensor as a web page.
+    - Serves the output of a Barometric Pressure Sensor as a web page.
   - UDPSendReceiveString
-    A example to send and receive UDP messages.
+    - A example to send and receive UDP messages.
+    - A Python script to send and receive UDP messages, "udp_test.py".
+    - Start the example before running Python script.
   - UdpNtpClient
     A simple NTP client.
 
 * LwIP App
-  - LwipIperf
-    RAW API example of iPerf TCP server and client
   - LwipHttp
-    RAW API example web server and client
+    - RAW API example web server and client
   - LwipSocket
-    Socket API example of `nonblocking`, `receive` and `select()` functions.
+    - Socket API example of `nonblocking`, `receive` and `select()` functions.
+    - Set the host address and port in "socket_examples.h".
+    - Start a simple HTTP server by Python, `python -m http.server 8080`, before starting the example.
+  - LwipIperf
+    - RAW API example of iPerf TCP server and client

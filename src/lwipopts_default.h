@@ -20,9 +20,11 @@
 // #define ALTCP_WOLFSSL_MEM_DEBUG         LWIP_DBG_ON
 #define LOG_LVL LOG_LVL_INFO
 
+/*
 #define LWIP_PLATFORM_ASSERT(x) \
   do {LOG_E("Assertion \"%s\" failed at line %d in %s\n", \
     x, __LINE__, __FILE__); } while(0)
+*/
 
 #define LWIP_MARK_TCPIP_THREAD() { \
   extern uint32_t tcpip_started; \
@@ -43,7 +45,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-extern void rt_kprintf(const char *fmt, ...);
+extern int rt_kprintf(const char *fmt, ...);
 #ifdef __cplusplus
 }
 #endif

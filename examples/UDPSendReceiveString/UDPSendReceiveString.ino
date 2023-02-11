@@ -86,7 +86,7 @@ void loop() {
     // read the packet into packetBufffer
     Udp.read(packetBuffer, UDP_TX_PACKET_MAX_SIZE);
     packetBuffer[packetSize] = 0;
-    LOG_I("Contents:\n%s", packetBuffer);
+    LOG_I("Contents: %s", packetBuffer);
 
     // send a reply to the IP address and port that sent us the packet we received
     Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());

@@ -14,7 +14,9 @@ extern "C" {
 EthernetServer::EthernetServer(uint16_t port)
 {
   _port = port;
-  _tcp_client[MAX_CLIENT] = {};
+  for (int n = 0; n < MAX_CLIENT; n++) {
+    _tcp_client[n] = {};
+  }
   _tcp_server = {};
 }
 

@@ -46,18 +46,19 @@
   */
 /* Includes ------------------------------------------------------------------*/
 #include "stm32_def.h"
-#include "lwip/timeouts.h"
-#include "netif/etharp.h"
-#include "ethernetif.h"
-#include "queue.h"
-#include <string.h>
 #include "PeripheralPins.h"
-#include "lwip/igmp.h"
-#include "lwip/tcpip.h"
 #include "stm32_eth.h"
 #if !defined(STM32_CORE_VERSION) || (STM32_CORE_VERSION  <= 0x01050000)
   #include "variant.h"
 #endif
+
+#include "lwip/tcpip.h"
+#include "lwip/igmp.h"
+#include "lwip/timeouts.h"
+#include "netif/etharp.h"
+
+#include "queue.h"
+#include "ethernetif.h"
 
 #ifdef __cplusplus
 extern "C" {
