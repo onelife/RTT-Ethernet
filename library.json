@@ -19,12 +19,12 @@
     {
         "owner": "onelife",
         "name": "RTT-CMSIS-OS",
-        "version": ">=0.9.0",
+        "version": ">=0.9.0"
     },
     {
         "owner": "stm32duino",
         "name": "STM32duino LwIP",
-        "version": ">=2.1.2",
+        "version": ">=2.1.2"
     }
   ],
   "build": {
